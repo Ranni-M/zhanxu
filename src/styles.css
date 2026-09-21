@@ -1848,7 +1848,9 @@ h3 {
     grid-template-columns: 1fr;
     gap: 15px;
   }
+  /* 单列布局下左侧文案不能再 sticky，否则会浮在模板卡上把卡片压住 */
   .template-feature-copy {
+    position: static;
     padding-top: 15px;
   }
   .template-feature h2 br {
@@ -2011,6 +2013,16 @@ h3 {
   }
   .hero-actions {
     margin-top: 24px;
+    /* 按钮文案较长，窄屏换行排开，避免把视口撑宽 */
+    flex-wrap: wrap;
+  }
+  /* 单列 hero：标题与按钮都不再撑最小宽度，窄屏不许出现横向溢出 */
+  .hero > * {
+    min-width: 0;
+  }
+  .hero h1 {
+    white-space: normal;
+    text-wrap: balance;
   }
   .button.large {
     height: 45px;
@@ -4531,6 +4543,11 @@ a.button {
     flex-direction: column;
     align-items: flex-start;
     gap: 18px;
+  }
+  /* 单列时文案按卡片宽度收缩：长 URL 是 nowrap，不锁宽度会把卡片顶出视口 */
+  .feature-qr-copy {
+    width: 100%;
+    min-width: 0;
   }
   .feature-qr-frame {
     width: 116px;

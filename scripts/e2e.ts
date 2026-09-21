@@ -371,9 +371,47 @@ try {
     await phone.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
   );
   assert.equal(await phone.locator('.feature-cell').count(), 6, '手机端功能区同样 6 格');
+  // 单列布局下模板区左侧文案不能再 sticky，否则会浮在模板卡上把卡片压住
+  await phone.locator('.template-feature').scrollIntoViewIfNeeded();
+  assert.equal(
+    await phone.locator('.template-feature-copy').evaluate((el) => getComputedStyle(el).position),
+    'static',
+    '窄屏下模板区文案必须是静态定位，不能盖住模板卡',
+  );
+  const templateOverlap = await phone.evaluate(() => {
+    window.scrollBy(0, 260);
+    const copy = document.querySelector('.template-feature-copy')!.getBoundingClientRect();
+    return [...document.querySelectorAll('.mini-template')].filter((card) => {
+      const box = card.getBoundingClientRect();
+      return (
+        box.top < copy.bottom &&
+        box.bottom > copy.top &&
+        box.left < copy.right &&
+        box.right > copy.left
+      );
+    }).length;
+  });
+  assert.equal(templateOverlap, 0, '滚动时模板卡不应与上方文案重合');
   await warmScroll(phone);
   await phone.screenshot({ path: path.join(out, 'home-mobile.png'), fullPage: true });
-  pass('390px手机布局无横向溢出');
+  pass('390px手机布局与模板区不重合');
+  // isMobile 模拟下 innerWidth 会跟着布局视口一起变大，测不出溢出，这里用普通窄窗口再卡一道
+  const narrow = await browser.newContext({
+    viewport: { width: 360, height: 800 },
+    deviceScaleFactor: 1,
+  });
+  const small = await narrow.newPage();
+  for (const target of [base, base + '/templates']) {
+    await small.goto(target);
+    await small.locator('h1').first().waitFor();
+    await small.waitForTimeout(300);
+    assert.ok(
+      await small.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+      `${target} 在 360px 下不该有横向溢出`,
+    );
+  }
+  await narrow.close();
+  pass('360px 窄窗口无横向溢出');
   await mobile.addCookies(await context.cookies());
   await phone.goto(studioUrl);
   await phone.getByRole('button', { name: '作品素材', exact: true }).waitFor();
