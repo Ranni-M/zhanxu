@@ -73,6 +73,7 @@ npm run check:format
 ## 部署与维护
 
 - [部署、备份、恢复](docs/deployment.md)
+- [国内云免费试用部署（不需要信用卡）](docs/deploy-cn-free.md)
 - [系统架构与设计取舍](docs/architecture.md)
 - [API约定](docs/api.md)
 - [验证记录与限制](docs/verification.md)

@@ -1,0 +1,34 @@
+[Unit]
+Description=Zhanxu (展序) portfolio platform
+Documentation=https://github.com/Ranni-M/zhanxu
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zhanxu
+Group=zhanxu
+WorkingDirectory=/opt/zhanxu
+
+# .env 由 deploy/bootstrap.sh 生成，systemd 用明文 KEY=VALUE 格式读取
+EnvironmentFile=/opt/zhanxu/.env
+Environment=NODE_ENV=production
+Environment=HOME=/var/lib/zhanxu
+
+ExecStart=/usr/bin/node --import tsx server/index.ts
+
+Restart=always
+RestartSec=3
+# 上传大文件与 PNG/ZIP 导出较吃内存
+TimeoutStopSec=30
+
+# --- 安全加固 ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+# 唯一可写目录：SQLite、上传素材、导出结果都在这里
+ReadWritePaths=/var/lib/zhanxu
+
+[Install]
+WantedBy=multi-user.target

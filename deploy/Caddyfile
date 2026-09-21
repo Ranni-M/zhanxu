@@ -1,0 +1,41 @@
+# 展序 ZHANXU — Caddy 反向代理配置
+#
+# bootstrap.sh 会把下方域名占位符替换成你的域名（DOMAIN=xxx），写入 /etc/caddy/Caddyfile。
+# 手动部署时把域名改成自己的即可，例如：
+#   zhanxu.example.com {
+#
+# 前提：
+#   1. 域名已解析到服务器公网 IP（A 记录）
+#   2. 国内服务器必须先完成 ICP 备案，否则 80/443 会被接入层拦截
+#   3. 控制台防火墙已放行 80 与 443
+# Caddy 会自动申请并续期 Let's Encrypt 证书，并把 HTTP 跳转到 HTTPS。
+
+{
+	email admin@example.com
+}
+
+DOMAIN_PLACEHOLDER {
+	encode zstd gzip
+
+	# 应用允许单文件 100MB，留出 multipart 开销
+	request_body {
+		max_size 105MB
+	}
+
+	reverse_proxy 127.0.0.1:3001 {
+		# 上传与导出耗时长，放宽代理超时（默认 0 = 不限制读超时）
+		transport http {
+			dial_timeout 10s
+			response_header_timeout 180s
+		}
+		# 保留 Cookie 与 Range 请求：视频播放依赖 Range
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output file /var/log/caddy/zhanxu-access.log {
+			roll_size 20MiB
+			roll_keep 5
+		}
+	}
+}
