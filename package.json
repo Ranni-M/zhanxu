@@ -12,8 +12,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "tsx scripts/e2e.ts",
-    "format": "prettier --write src server shared tests scripts docs *.json *.ts *.html README.md",
-    "check:format": "prettier --check src server shared tests scripts docs *.json *.ts *.html README.md",
+    "format": "prettier --write src server shared tests scripts docs *.json *.ts *.html README.md README_EN.md",
+    "check:format": "prettier --check src server shared tests scripts docs *.json *.ts *.html README.md README_EN.md",
     "postinstall": "node scripts/copy-pdf-assets.mjs",
     "backup": "node --env-file-if-exists=.env --import tsx scripts/backup.ts"
   },

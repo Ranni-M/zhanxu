@@ -27,7 +27,7 @@
 - 本机没有Docker，Dockerfile/Compose仅检查配置，尚未实际构建运行。
 - 未部署公网域名；本机链接不会让远程访客自动可用。
 - 没有AI语义摘要、OCR、邮件验证/找回、视频转码或内容审核。
-- 不把已有技能的安装等同于应用；本项目已经实际读取并按taste-skill、Emil设计工程和mobile-native进行了实现与修订。
+- 视觉、动效与移动端体验规范不只是写成文档，已全部落实到代码并逐项修订，详见 docs/design.md 与 docs/motion-review.md。
 
 ## 首屏性能
 

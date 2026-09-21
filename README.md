@@ -1,8 +1,24 @@
 # 展序 ZHANXU
 
+[![CI](https://github.com/Ranni-M/zhanxu/actions/workflows/ci.yml/badge.svg)](https://github.com/Ranni-M/zhanxu/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Node.js >= 24](https://img.shields.io/badge/node-%3E%3D24-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+
 **把毕业设计作为一个完整项目展示。** 上传图片、视频、论文和项目文件，按模块组织创作过程，生成独立公开页，并导出封面或多页图文包。
 
-这是可运行的全栈应用，适合个人毕业设计、作品集，以及单台服务器上的小规模共享使用。界面采用 taste-skill，交互细节应用 Emil 的设计工程规范。
+这是可运行的全栈应用，适合个人毕业设计、作品集，以及单台服务器上的小规模共享使用。
+
+[English README](README_EN.md) · 在线演示：部署筹备中（域名备案完成后更新链接）
+
+## 界面预览
+
+| 首页                               | 项目编辑器                                 |
+| ---------------------------------- | ------------------------------------------ |
+| ![首页](docs/screenshots/home.png) | ![项目编辑器](docs/screenshots/editor.png) |
+
+| 公开项目页                                         | 深色模式工作台                                         |
+| -------------------------------------------------- | ------------------------------------------------------ |
+| ![公开项目页](docs/screenshots/public-project.png) | ![深色模式工作台](docs/screenshots/workspace-dark.png) |
 
 ## 功能
 
@@ -78,7 +94,7 @@ npm run check:format
 - [API约定](docs/api.md)
 - [验证记录与限制](docs/verification.md)
 - [视觉与交互设计](docs/design.md)
-- [Emil交互审查](docs/motion-review.md)
+- [动效与交互审查](docs/motion-review.md)
 - [示例素材来源](docs/assets.md)
 
 已提供 Dockerfile 与 compose.yaml。容器内包含中文字体，供导出使用。Docker配置在本机未实际构建验证，详见验证记录。
@@ -94,4 +110,4 @@ npm run check:format
 
 ## 素材与许可
 
-源码由本项目编写；图标、字体及依赖采用各自许可证。演示照片来源与用途见 docs/assets.md，不应被作为真实学生成果宣传。发布到GitHub前，可以替换为你自己的作品图，并自行选择项目开源许可证。
+源码以 [MIT 许可证](LICENSE) 开源；图标、字体及依赖采用各自许可证。演示照片来源与用途见 docs/assets.md，仅用于功能演示，不应被作为真实学生成果宣传；实际使用时可以替换为你自己的作品图。

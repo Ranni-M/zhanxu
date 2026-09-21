@@ -1,5 +1,8 @@
 # 换行符规范
+# 全部文本文件统一 LF：Windows 上 checkout 不转 CRLF，避免 Prettier 本地检查误报
+* text=auto eol=lf
 # 部署脚本与 systemd 单元必须是 LF：CRLF 会让 Linux 报 "bad interpreter: /usr/bin/env bash^M"
 *.sh text eol=lf
 *.service text eol=lf
 deploy/Caddyfile text eol=lf
+*.png binary
