@@ -1,0 +1,11 @@
+node_modules
+dist
+data
+backups
+output
+.git
+.playwright-cli
+.env
+.env.*
+!.env.example
+*.tsbuildinfo

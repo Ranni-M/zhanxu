@@ -1,0 +1,13 @@
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,email TEXT NOT NULL UNIQUE,name TEXT NOT NULL,password_hash TEXT NOT NULL,created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
+CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,document TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS projects_owner ON projects(owner_id,updated_at DESC);
+CREATE TABLE IF NOT EXISTS assets(id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,filename TEXT NOT NULL UNIQUE,original_name TEXT NOT NULL,mime TEXT NOT NULL,kind TEXT NOT NULL,bytes INTEGER NOT NULL,created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS assets_project ON assets(project_id);
+CREATE TABLE IF NOT EXISTS publications(slug TEXT PRIMARY KEY,project_id TEXT NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,snapshot TEXT NOT NULL,revision INTEGER NOT NULL,published_at INTEGER NOT NULL,is_live INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS export_jobs(id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,revision INTEGER NOT NULL,format TEXT NOT NULL,snapshot TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'queued',result_filename TEXT,error TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,UNIQUE(project_id,revision,format));
+CREATE TABLE IF NOT EXISTS bookmarks(user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,project_id TEXT NOT NULL,PRIMARY KEY(user_id,project_id));
+PRAGMA user_version = 1;

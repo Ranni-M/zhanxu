@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+output/
+.playwright-cli/
+*.tsbuildinfo
+
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+public/pdfjs/
+backups/
+public/previews/

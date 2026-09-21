@@ -1,0 +1,60 @@
+{
+  "name": "zhanxu",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail -n api,web \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "tsx watch server/index.ts",
+    "dev:web": "tsx scripts/build-previews.ts && vite --host 127.0.0.1",
+    "build": "node scripts/copy-pdf-assets.mjs && tsx scripts/build-previews.ts && tsc -b && tsc -p tsconfig.server.json && vite build && node scripts/compress-assets.mjs",
+    "start": "node --env-file-if-exists=.env --import tsx server/index.ts",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "tsx scripts/e2e.ts",
+    "format": "prettier --write src server shared tests scripts docs *.json *.ts *.html README.md",
+    "check:format": "prettier --check src server shared tests scripts docs *.json *.ts *.html README.md",
+    "postinstall": "node scripts/copy-pdf-assets.mjs",
+    "backup": "node --env-file-if-exists=.env --import tsx scripts/backup.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@napi-rs/canvas": "^1.0.9",
+    "@phosphor-icons/react": "^2.1.10",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "idb-keyval": "^6.3.0",
+    "multer": "^2.4.0",
+    "pdfjs-dist": "^6.3.289",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4",
+    "sharp": "^0.35.4",
+    "tsx": "^4.23.15",
+    "yazl": "^3.3.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/cli": "^0.1.21",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/yazl": "^3.3.1",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "lighthouse": "^13.5.0",
+    "prettier": "^3.9.8",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

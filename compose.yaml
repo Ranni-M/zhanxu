@@ -1,0 +1,20 @@
+services:
+  zhanxu:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3001}
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      MAX_USER_STORAGE_MB: ${MAX_USER_STORAGE_MB:-500}
+    volumes:
+      - zhanxu-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  zhanxu-data:

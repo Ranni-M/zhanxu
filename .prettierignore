@@ -1,0 +1,8 @@
+node_modules
+dist
+data
+backups
+output
+.playwright-cli
+public/pdfjs
+package-lock.json
