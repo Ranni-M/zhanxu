@@ -194,7 +194,7 @@ h3 {
 }
 .desktop-nav {
   display: flex;
-  gap: 34px;
+  gap: 28px;
   height: 100%;
   align-items: center;
 }
@@ -202,7 +202,7 @@ h3 {
   height: 100%;
   padding: 0;
   position: relative;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
@@ -214,10 +214,10 @@ h3 {
   position: absolute;
   content: '';
   height: 2px;
-  width: 20px;
+  width: 24px;
   background: var(--accent);
   bottom: 18px;
-  left: calc(50% - 10px);
+  left: calc(50% - 12px);
 }
 .nav-count {
   font-size: 10px;
@@ -506,12 +506,12 @@ h3 {
   scroll-margin-top: 36px;
 }
 .section-title h2 {
-  font-size: 29px;
-  letter-spacing: -0.8px;
+  font-size: 33px;
+  letter-spacing: -1px;
 }
 .section-title > p {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   margin-top: 14px;
   line-height: 1.8;
 }
@@ -841,17 +841,17 @@ h3 {
   color: var(--muted);
 }
 .page-heading {
-  padding-top: 64px;
-  padding-bottom: 44px;
+  padding-top: 74px;
+  padding-bottom: 50px;
 }
 .page-heading h1 {
-  font-size: 38px;
-  letter-spacing: -1px;
+  font-size: 46px;
+  letter-spacing: -1.4px;
   line-height: 1.5;
   margin-top: 14px;
 }
 .page-heading p {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.9;
   color: var(--muted);
   margin-top: 15px;
@@ -866,7 +866,7 @@ h3 {
   margin-top: 32px;
 }
 .templates-page .page-heading {
-  padding-top: 40px;
+  padding-top: 52px;
 }
 .templates-grid {
   display: grid;
@@ -1922,7 +1922,7 @@ h3 {
     width: 23px;
   }
   .page-heading h1 {
-    font-size: 33px;
+    font-size: 38px;
   }
 }
 @media (max-width: 767px) {
@@ -2065,8 +2065,8 @@ h3 {
     padding-bottom: 22px;
   }
   .section-title h2 {
-    font-size: 23px;
-    letter-spacing: -0.6px;
+    font-size: 26px;
+    letter-spacing: -0.7px;
     line-height: 1.6;
   }
   .section-title > p {
@@ -2198,15 +2198,15 @@ h3 {
     justify-content: space-between;
   }
   .page-heading {
-    padding-top: 38px;
-    padding-bottom: 30px;
+    padding-top: 44px;
+    padding-bottom: 34px;
   }
   .page-heading h1 {
-    font-size: 27px;
+    font-size: 30px;
     line-height: 1.6;
   }
   .page-heading p {
-    font-size: 12px;
+    font-size: 13px;
   }
   .templates-grid {
     grid-template-columns: 1fr;
@@ -2498,7 +2498,7 @@ h3 {
     padding: 7px;
   }
   .section-title h2 {
-    font-size: 21px;
+    font-size: 23px;
   }
   .closing {
     flex-direction: column;
@@ -2625,7 +2625,7 @@ a.button {
   align-items: center;
   height: 100%;
   position: relative;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
@@ -2637,15 +2637,15 @@ a.button {
 .desktop-nav > a.active:after {
   content: '';
   position: absolute;
-  width: 20px;
+  width: 24px;
   height: 2px;
   background: var(--accent);
   bottom: 18px;
-  left: calc(50% - 10px);
+  left: calc(50% - 12px);
 }
 .mobile-nav > a {
   padding: 11px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   border-radius: 7px;
   text-decoration: none;
@@ -4341,6 +4341,17 @@ a.button {
   height: 42px;
   font-size: 12px;
 }
+/* 两个导出入口排在一条线上：PDF 是主按钮，HTML 网页是文字按钮 */
+.feature-downloads {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+.feature-downloads .feature-action {
+  margin-top: 0;
+}
 .feature-status {
   font-size: 10.5px;
   line-height: 1.7;
@@ -4440,6 +4451,15 @@ a.button {
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 9.5px;
+}
+/* 发现区里标着「示例」的是排版演示，不是谁的作品 */
+.project-info .sample-tag {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 9px;
+  color: var(--accent);
 }
 /* 滚动入场：只有允许动画时才隐藏初始状态，减少动态偏好下直接显示 */
 @media (prefers-reduced-motion: no-preference) {

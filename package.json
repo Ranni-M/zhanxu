@@ -1,7 +1,7 @@
 {
   "name": "zhanxu",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "scripts": {
     "dev": "concurrently --kill-others-on-fail -n api,web \"npm:dev:api\" \"npm:dev:web\"",

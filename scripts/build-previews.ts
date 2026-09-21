@@ -10,7 +10,8 @@ const gallerySkeleton: Record<TemplateId, SkeletonId> = {
   editorial: 'stack',
   gallery: 'split',
   bold: 'statement',
-  paper: 'type-only',
+  // paper 的样件只有一张图，纯排字（type-only）和图阵（grid）在小卡片上会显得空，改用大字版
+  paper: 'statement',
   ink: 'banner',
   neon: 'stack',
   kraft: 'banner',

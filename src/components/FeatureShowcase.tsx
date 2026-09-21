@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ArrowsLeftRight,
   FileDoc,
+  FileHtml,
   FilePdf,
   FileZip,
   FilmStrip,
@@ -31,7 +32,8 @@ const squareSample: Project = {
 };
 const printCover: Project = { ...samples[0], posterSize: 'print' };
 const printInner: Project = {
-  ...samples[1],
+  // 文字内页用同一份作品的封面版式重排，这样两张图是同一本作品集的前后页
+  ...samples[0],
   template: 'kraft',
   skeleton: 'type-only',
   posterSize: 'print',
@@ -76,6 +78,7 @@ export default function FeatureShowcase({
 }) {
   const [dragging, setDragging] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [htmlBusy, setHtmlBusy] = useState(false);
   const [pdfText, setPdfText] = useState('');
   const [qr, setQr] = useState('');
   const shared = projects.find((project) => project.publishedSlug);
@@ -104,6 +107,24 @@ export default function FeatureShowcase({
       setPdfText('生成失败：' + (error as Error).message);
     } finally {
       setPdfBusy(false);
+    }
+  }
+  // 网页版是真实的单文件导出：图片现读现内嵌，所以这里下载的就是最终成品
+  async function downloadHtml() {
+    setHtmlBusy(true);
+    setPdfText('正在把图片读进网页…');
+    try {
+      const { exportLocally } = await import('../lib/local-export');
+      const { bytes } = await exportLocally(samples[0], 'html', setPdfText);
+      setPdfText(
+        '已生成 栖居之间-作品集.html：单文件 ' +
+          (bytes / 1024 / 1024).toFixed(1) +
+          ' MB，双击就能看。',
+      );
+    } catch (error) {
+      setPdfText('生成失败：' + (error as Error).message);
+    } finally {
+      setHtmlBusy(false);
     }
   }
   return (
@@ -235,10 +256,11 @@ export default function FeatureShowcase({
           <span className="feature-icon">
             <FilePdf size={19} weight="bold" />
           </span>
-          <h3>作品集 PDF</h3>
+          <h3>作品集导出</h3>
         </div>
         <p className="feature-copy">
-          A4 多页排版，自动生成目录、页码和装订边，打印出来就是一本能翻的作品集。
+          A4 多页排版带自动目录、页码和装订边；也可以压成一个 HTML
+          单文件，双击就能看，发给谁都不丢图。
         </p>
         <div className="feature-pages">
           <figure className="feature-page">
@@ -250,14 +272,24 @@ export default function FeatureShowcase({
             <figcaption>文字内页</figcaption>
           </figure>
         </div>
-        <button
-          className="button secondary feature-action"
-          onClick={downloadPdf}
-          disabled={pdfBusy}
-        >
-          <FilePdf size={17} weight="bold" />
-          {pdfBusy ? '正在排版…' : '下载示例作品集 PDF'}
-        </button>
+        <div className="feature-downloads">
+          <button
+            className="button secondary feature-action"
+            onClick={downloadPdf}
+            disabled={pdfBusy || htmlBusy}
+          >
+            <FilePdf size={17} weight="bold" />
+            {pdfBusy ? '正在排版…' : '下载示例作品集 PDF'}
+          </button>
+          <button
+            className="button text-button feature-action"
+            onClick={downloadHtml}
+            disabled={htmlBusy || pdfBusy}
+          >
+            <FileHtml size={17} weight="bold" />
+            {htmlBusy ? '正在读图…' : '或导出 HTML 网页'}
+          </button>
+        </div>
         {pdfText && (
           <small className="feature-status" role="status">
             {pdfText}

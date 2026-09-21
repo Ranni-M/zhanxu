@@ -51,7 +51,12 @@ export default function Home({
     [sort, setSort] = useState('curated');
   const featureSection = useReveal<HTMLElement>(),
     discoverSection = useReveal<HTMLElement>();
-  const source = projects.length ? projects : samples;
+  // 公开项目里已经出现过的模板就不重复放示例：缺哪套版式，就补哪一套到发现区
+  const usedTemplates = new Set(projects.map((p) => p.template));
+  const showcase = projects.length
+    ? samples.filter((s) => !usedTemplates.has(s.template))
+    : samples;
+  const source = [...projects, ...showcase];
   const countIn = (category: string) =>
     category === '全部作品'
       ? source.length
@@ -265,8 +270,17 @@ export default function Home({
         </div>
         <div className="results-meta">
           <span>
-            {bookmarkedOnly ? '已收藏' : projects.length ? '公开项目' : '排版示例'}
+            {bookmarkedOnly
+              ? '已收藏'
+              : projects.length && showcase.length
+                ? '公开项目与示例'
+                : projects.length
+                  ? '公开项目'
+                  : '排版示例'}
             <span className="count">{visible.length}</span>
+            {projects.length > 0 && showcase.length > 0 && !bookmarkedOnly && (
+              <span className="meta-flag">含 {showcase.length} 个模板示例</span>
+            )}
             {filtering && <span className="meta-flag">已筛选</span>}
           </span>
           <label className="sort-label">
@@ -303,27 +317,31 @@ export default function Home({
                       {project.title}
                     </button>
                     <p>
+                      {project.sample && <span className="sample-tag">示例</span>}
                       {project.category}
                       <span>/</span>
                       {project.subtitle}
                     </p>
                   </div>
-                  <button
-                    className={
-                      'icon-button save-project ' +
-                      (bookmarks.includes(project.id) ? 'is-saved' : '')
-                    }
-                    aria-label={
-                      (bookmarks.includes(project.id) ? '取消收藏' : '收藏') + project.title
-                    }
-                    aria-pressed={bookmarks.includes(project.id)}
-                    onClick={() => toggleBookmark(project.id)}
-                  >
-                    <BookmarkSimple
-                      size={19}
-                      weight={bookmarks.includes(project.id) ? 'fill' : 'regular'}
-                    />
-                  </button>
+                  {/* 示例不归任何账号所有，收藏接口会拒绝，所以干脆不给按钮 */}
+                  {!project.sample && (
+                    <button
+                      className={
+                        'icon-button save-project ' +
+                        (bookmarks.includes(project.id) ? 'is-saved' : '')
+                      }
+                      aria-label={
+                        (bookmarks.includes(project.id) ? '取消收藏' : '收藏') + project.title
+                      }
+                      aria-pressed={bookmarks.includes(project.id)}
+                      onClick={() => toggleBookmark(project.id)}
+                    >
+                      <BookmarkSimple
+                        size={19}
+                        weight={bookmarks.includes(project.id) ? 'fill' : 'regular'}
+                      />
+                    </button>
+                  )}
                 </div>
               </article>
             ))}
@@ -357,7 +375,11 @@ export default function Home({
           </button>
         )}
         <p className="sample-caption">
-          {projects.length ? '项目由创作者自主发布。' : '以上为排版概念示例，用于体验展示效果。'}
+          {projects.length
+            ? showcase.length
+              ? '公开项目由创作者自主发布；标着「模板示例」的是排版演示，点开能看到不同的展示版式。'
+              : '项目由创作者自主发布。'
+            : '以上为排版概念示例，用于体验展示效果。'}
         </p>
       </section>
       <section className="template-feature container">

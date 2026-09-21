@@ -29,7 +29,7 @@ import { uploadHint } from '../domain/limits';
 import { api, message } from '../lib/api';
 import { putAsset } from '../services/asset-service';
 import { exportLocally } from '../lib/local-export';
-import type { ExportFormat } from '../lib/api';
+import type { LocalExportFormat } from '../lib/local-export';
 import { projectService } from '../services/project-service';
 import { importFiles } from '../lib/import';
 import PosterImage from './PosterImage';
@@ -47,7 +47,7 @@ function recovered(initial: Project) {
 }
 
 const exportLabels: Record<
-  ExportFormat,
+  LocalExportFormat,
   { name: string; ing: string; done: string; help: string }
 > = {
   pdf: {
@@ -55,6 +55,12 @@ const exportLabels: Record<
     ing: '作品集 PDF',
     done: '作品集已生成，正在下载。',
     help: '封面加自动目录、页眉页码和左侧装订边的 A4 打印稿，交给老师或打印店都能直接出。',
+  },
+  html: {
+    name: '单文件网页',
+    ing: '网页版作品集',
+    done: '网页版作品集已生成，正在下载。',
+    help: '把整个项目压成一个 .html 单文件：图片已经内嵌，双击就能离线打开，也能直接丢给任何人。',
   },
   bundle: {
     name: '图文包',
@@ -99,7 +105,7 @@ export default function Editor({
   const [visibility, setVisibility] = useState<'public' | 'private'>(
     initial.publishedVisibility || 'public',
   );
-  const [exportFormat, setExportFormat] = useState<ExportFormat>('pdf');
+  const [exportFormat, setExportFormat] = useState<LocalExportFormat>('pdf');
   const [dragging, setDragging] = useState(false);
   const [birth, setBirth] = useState<Birth | undefined>(initial.birth);
   const skeletonNote = (() => {
@@ -258,9 +264,13 @@ export default function Editor({
     setError('');
     try {
       const saved = dirty ? await saveCurrent() : project;
-      if (guest) {
-        await exportLocally(saved, exportFormat, setProgress);
-        onToast(exportLabels[exportFormat].done);
+      // 网页版是浏览器里现算的单文件（要把图片读成 base64），所以登录与否都走本地导出
+      if (guest || exportFormat === 'html') {
+        const { bytes } = await exportLocally(saved, exportFormat, setProgress);
+        onToast(
+          exportLabels[exportFormat].done +
+            (bytes > 0 ? '（' + (bytes / 1024 / 1024).toFixed(1) + ' MB）' : ''),
+        );
         return;
       }
       const result = await api.export(saved.id, saved.revision!, exportFormat);
@@ -958,9 +968,10 @@ export default function Editor({
                     <select
                       aria-label="导出形式"
                       value={exportFormat}
-                      onChange={(e) => setExportFormat(e.target.value as ExportFormat)}
+                      onChange={(e) => setExportFormat(e.target.value as LocalExportFormat)}
                     >
                       <option value="pdf">作品集 PDF（可直接打印）</option>
+                      <option value="html">作品集网页（HTML 单文件）</option>
                       <option value="bundle">多页图文展示包（ZIP）</option>
                       <option value="cover">项目封面（PNG）</option>
                     </select>

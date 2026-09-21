@@ -100,12 +100,14 @@ erDiagram
 
 ZIP仅存储、下载，不解压、不执行。软件项目运行在作者提供的在线体验地址，而不是本平台直接启动用户提交的代码。
 
-## 两种导出
+## 三种导出
 
 - 封面：1600×2000 PNG。
 - 图文包：ZIP，包含封面、自动分页的文字介绍、每张图片的完整展示页，以及说明文件。图片页面等比完整放入；不会把24张图片挤进一张超长画布。
+- 作品集 PDF：A4 多页，带目录、页码与装订边，由服务端导出任务生成。
+- 单文件网页：整个项目排成一个 .html，图片读取成 data URL 内嵌，不依赖服务端任务也不依赖网络（src/lib/portfolio-html.ts 是纯函数）。
 
-shared/render.mjs不依赖React或数据库。浏览器传入HTMLCanvasElement与Image；Worker传入@napi-rs/canvas。共享封面排版算法，避免预览与导出成为两套设计。
+shared/render.mjs不依赖React或数据库。浏览器传入HTMLCanvasElement与Image；Worker传入@napi-rs/canvas。共享封面排版算法，避免预览与导出成为两套设计；导出的网页也用同一张配色表（themes）。
 
 每次只运行一个Worker，防止大型渲染阻塞HTTP或同时耗尽内存。任务失败有错误状态并可重试；进程重启后会重新排队此前running的任务。字体通过系统安装，Docker包含Noto CJK；字体不同的系统可能产生轻微排版差异。
 

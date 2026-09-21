@@ -24,6 +24,10 @@ This is a runnable full-stack application, suitable for personal graduation proj
 | ------------------------------------------------------------ | --------------------------------------------------------------------- |
 | ![Home feature showcase](docs/screenshots/home-features.png) | ![Public page on a phone](docs/screenshots/public-project-mobile.png) |
 
+| Discover grid: nine template samples                 |
+| ---------------------------------------------------- |
+| ![Discover grid](docs/screenshots/home-discover.png) |
+
 ## Features
 
 - Email/password registration, sign-in, sign-out and password change with server-side sessions (scrypt hashing, hashed session tokens, CSRF origin checks, rate limiting).
@@ -36,9 +40,9 @@ This is a runnable full-stack application, suitable for personal graduation proj
 - Zero-fill import: drop a ZIP of the whole project folder and titles, intros, author, year, category and image order are read out into an editable draft.
 - Guest mode: create a draft, preview and export a portfolio without an account; publishing asks you to sign in, then the draft moves into your account.
 - Multiple colour ways per project, plus a draggable before/after comparison on the public page.
-- Discovery of published works with category search, bookmarks and sorting.
+- Discovery of published works with category search, bookmarks and sorting; the feed starts with all nine template samples (real public projects and samples shown together, samples are labelled and cannot be bookmarked).
 - Three cover layouts; server-side export of a 1600px-wide PNG cover or an auto-paginated PNG picture pack (ZIP).
-- Multi-page A4 portfolio PDF (auto table of contents, page numbers, binding margin) and a booth QR code for print or screen.
+- Multi-page A4 portfolio PDF (auto table of contents, page numbers, binding margin), a single-file HTML portfolio (all images inlined, opens offline by double-click) and a booth QR code for print or screen.
 - The home page demonstrates import, layout, comparison, export and asset handling with real components.
 - Theme switching, mobile layout, keyboard navigation, and reduced-motion support.
 
@@ -92,7 +96,7 @@ npm run check:format
 
 - API tests boot an isolated server with a temporary database and never touch everyday data.
 - Browser tests run on the Playwright Core runtime bundled with the repo and require Chrome installed on the machine.
-- Tests cover registration, uploads, content modules, save/recovery, publishing, anonymous access, withdrawal, PNG/ZIP downloads, mobile layout, and accessibility.
+- Tests cover registration, uploads, content modules, save/recovery, publishing, anonymous access, withdrawal, PNG/ZIP/portfolio PDF single-file HTML downloads, zero-fill import, guest mode, mobile layout, and accessibility.
 - Screenshots and test reports are written to `output/playwright/` and are not committed to Git.
 
 ## Deployment & maintenance

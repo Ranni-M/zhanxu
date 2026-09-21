@@ -89,14 +89,24 @@ try {
   await page.locator('.hero-art .poster-image img').first().waitFor();
   await warmScroll(page);
   await page.screenshot({ path: path.join(out, 'home-desktop.png'), fullPage: true });
-  assert.equal(await page.locator('.project-card').count(), 4);
+  assert.equal(await page.locator('.project-card').count(), 9, '首页应该铺满 9 套模板示例');
+  assert.equal(
+    await page.locator('.project-card .sample-tag').count(),
+    9,
+    '每个模板示例都要标出「示例」',
+  );
+  assert.equal(
+    await page.locator('.project-card .save-project').count(),
+    0,
+    '示例不属于任何人，不该出现收藏按钮',
+  );
   assert.equal(await page.locator('.feature-cell').count(), 6, '首页功能区应为 6 格');
   assert.equal(
     await page.locator('.feature-extract-row').count(),
     5,
     '导入解析面板应展示 5 个字段',
   );
-  assert.equal(await page.locator('.category-tabs .tab-count').count(), 5, '分类标签应带作品数量');
+  assert.equal(await page.locator('.category-tabs .tab-count').count(), 8, '分类标签应带作品数量');
   await page.locator('.feature-compare .compare-range').waitFor();
   await page.locator('.feature-qr-frame img').waitFor();
   const featureDownload = page.waitForEvent('download', { timeout: 180000 });
@@ -108,6 +118,18 @@ try {
   assert.equal(featurePdf.subarray(0, 5).toString(), '%PDF-');
   await page.locator('.feature-status').waitFor();
   assert.match(await page.locator('.feature-status').innerText(), /已生成/);
+  const featureHtmlEvent = page.waitForEvent('download', { timeout: 180000 });
+  await page.getByRole('button', { name: '或导出 HTML 网页' }).click();
+  const featureHtmlFile = await featureHtmlEvent;
+  assert.match(featureHtmlFile.suggestedFilename(), /作品集\.html$/);
+  await featureHtmlFile.saveAs(path.join(out, 'home-sample.html'));
+  const sampleHtml = await readFile(path.join(out, 'home-sample.html'), 'utf8');
+  assert.ok(sampleHtml.startsWith('<!doctype html>'));
+  assert.ok(sampleHtml.includes('展签信息') && sampleHtml.includes('作品图集'));
+  assert.ok(sampleHtml.includes('data:image/jpeg;base64,'), '网页版作品集必须把图片内嵌成一个文件');
+  await page.waitForFunction(() =>
+    /单文件/.test(document.querySelector('.feature-status')?.textContent || ''),
+  );
   await page.getByRole('textbox', { name: '搜索作品' }).fill('不存在的项目');
   await page.getByRole('heading', { name: '没有找到相关作品' }).waitFor();
   await page.getByRole('button', { name: '查看全部作品', exact: true }).click();
@@ -293,6 +315,18 @@ try {
     '公开作品的展台二维码应该显示出来',
   );
   pass('浏览器下载作品集PDF，并显示展台二维码');
+  await page.waitForFunction(() => !document.querySelector('.operation-status'));
+  await page.getByLabel('导出形式', { exact: true }).selectOption('html');
+  event = page.waitForEvent('download', { timeout: 180000 });
+  await page.getByRole('button', { name: '导出单文件网页', exact: true }).click();
+  download = await event;
+  await download.saveAs(path.join(out, 'export-portfolio.html'));
+  assert.match(download.suggestedFilename(), /作品集\.html$/);
+  const exportedHtml = await readFile(path.join(out, 'export-portfolio.html'), 'utf8');
+  assert.ok(exportedHtml.startsWith('<!doctype html>'));
+  assert.ok(exportedHtml.includes('栖居之间'));
+  assert.ok(exportedHtml.includes('data:image/'), '登录用户的网页版同样把图片内嵌进去');
+  pass('浏览器下载单文件网页版作品集');
   await page.waitForFunction(() => !document.querySelector('.operation-status'));
   await page.getByRole('button', { name: '返回我的作品', exact: true }).click();
   await page.getByRole('button', { name: '栖居之间：完整项目展示', exact: true }).waitFor();
