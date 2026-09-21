@@ -1,8 +1,9 @@
 import type { ProjectImage } from '../data';
+import { uploadLimits } from '../domain/limits';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 export type ImportResult = { images: ProjectImage[]; title: string; intro: string; notice: string };
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
-async function imageData(file: File): Promise<string> {
+export async function imageData(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   if (bitmap.width * bitmap.height > 40_000_000) {
     bitmap.close();
@@ -26,7 +27,7 @@ export async function importFiles(
 ): Promise<ImportResult> {
   if (!files.length) return { images: [], title: '', intro: '', notice: '' };
   if (capacity < 1) throw new Error('每个项目最多保留 24 张图片，请先移除部分图片。');
-  if (files.length > 8) throw new Error('一次最多选择 8 个文件。');
+  if (files.length > 24) throw new Error('一次最多选择 24 个文件。');
   const result: ImportResult = {
     images: [],
     title: files[0].name.replace(/\.[^.]+$/, ''),
@@ -41,8 +42,12 @@ export async function importFiles(
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
     if (!isPdf && !ACCEPTED.includes(file.type))
       throw new Error('支持 JPG、PNG、WebP 图片和 PDF 文件。');
-    if (file.size > (isPdf ? 25 : 12) * 1024 * 1024)
-      throw new Error(isPdf ? 'PDF 请控制在 25 MB 以内。' : '单张图片请控制在 12 MB 以内。');
+    if (file.size > (isPdf ? uploadLimits.pdfMb : uploadLimits.imageMb) * 1024 * 1024)
+      throw new Error(
+        isPdf
+          ? `PDF 请控制在 ${uploadLimits.pdfMb} MB 以内。`
+          : `单张图片请控制在 ${uploadLimits.imageMb} MB 以内。`,
+      );
     onProgress('正在读取 ' + file.name);
     if (!isPdf) {
       result.images.push({

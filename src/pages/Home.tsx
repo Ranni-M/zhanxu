@@ -23,6 +23,9 @@ export default function Home({
   onUse,
   onTemplates,
   onBookmark,
+  onImportZip,
+  importing,
+  importText,
   nextOffset,
   onLoadMore,
 }: {
@@ -33,12 +36,16 @@ export default function Home({
   onUse: (p: Project) => void;
   onTemplates: () => void;
   onBookmark: (id: string) => void;
+  onImportZip: (file: File) => void;
+  importing: boolean;
+  importText: string;
   nextOffset: number | null;
   onLoadMore: () => void;
 }) {
   const [category, setCategory] = useState('全部作品'),
     [query, setQuery] = useState(''),
     [bookmarkedOnly, setBookmarkedOnly] = useState(false),
+    [dragging, setDragging] = useState(false),
     [sort, setSort] = useState('curated');
   const source = projects.length ? projects : samples;
   const filtered = source.filter(
@@ -54,7 +61,25 @@ export default function Home({
   const toggleBookmark = onBookmark;
   return (
     <main>
-      <section className="hero container">
+      <section
+        className={'hero container' + (dragging ? ' hero-dropping' : '')}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return;
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+          setDragging(false);
+        }}
+        onDrop={(event) => {
+          const file = event.dataTransfer.files[0];
+          setDragging(false);
+          if (!file) return;
+          event.preventDefault();
+          onImportZip(file);
+        }}
+      >
         <div className="hero-copy">
           <div className="eyebrow">
             <span className="eyebrow-icon">
@@ -77,11 +102,31 @@ export default function Home({
               创建作品
               <ArrowUpRight size={19} />
             </button>
+            <label className={'button secondary large import-button' + (importing ? ' busy' : '')}>
+              <UploadSimple size={18} weight="bold" />
+              {importing ? '正在自动填写…' : '导入压缩包'}
+              <input
+                type="file"
+                accept=".zip,application/zip"
+                disabled={importing}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (file) onImportZip(file);
+                }}
+              />
+            </label>
             <button className="button text-button large" onClick={() => onUse(samples[0])}>
               体验示例
               <ArrowRight size={18} />
             </button>
           </div>
+          <p className="import-hint">
+            {importText ||
+              (dragging
+                ? '松手，标题、简介、图片和配色都会自动填好。'
+                : '把毕设文件夹压成 zip 拖进来，零填写生成作品页。')}
+          </p>
         </div>
         <div className="hero-art" aria-label="三种毕业设计展示版式预览">
           <div className="hero-backdrop" />

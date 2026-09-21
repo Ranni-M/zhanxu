@@ -2,31 +2,51 @@
 
 响应为JSON；失败格式为 {"error":"可读的错误说明"}。写入请求必须带 X-Zhanxu-Request: 1；浏览器Origin必须符合PUBLIC_ORIGIN。会话由HttpOnly Cookie管理。
 
-| 方法   | 地址                          | 作用                                      |
-| ------ | ----------------------------- | ----------------------------------------- |
-| GET    | /api/health                   | 健康检查                                  |
-| GET    | /api/auth/me                  | 当前登录用户，未登录返回null              |
-| POST   | /api/auth/register            | name、email、password注册                 |
-| POST   | /api/auth/login               | email、password登录                       |
-| POST   | /api/auth/logout              | 退出会话                                  |
-| POST   | /api/auth/password            | currentPassword、password修改密码         |
-| GET    | /api/projects                 | 当前账号的项目                            |
-| POST   | /api/projects                 | 指定template创建项目                      |
-| GET    | /api/projects/:id             | 读取自己项目                              |
-| PUT    | /api/projects/:id             | 保存完整document字段和revision            |
-| DELETE | /api/projects/:id             | 删除项目、发布快照与文件                  |
-| POST   | /api/projects/:id/assets      | multipart/form-data中的file字段上传       |
-| GET    | /api/assets/:id               | 仅作者可读的文件                          |
-| POST   | /api/projects/:id/publish     | 发布指定revision，返回slug                |
-| DELETE | /api/projects/:id/publication | 撤回公开展示                              |
-| GET    | /api/publications?offset=0    | 已发布项目摘要，一页最多50个              |
-| GET    | /api/publications/:slug       | 完整公开项目快照                          |
-| GET    | /api/public-assets/:slug/:id  | 快照中允许公开的资产                      |
-| GET    | /api/bookmarks                | 当前账号收藏ID列表                        |
-| PUT    | /api/bookmarks/:id            | saved=true/false更新收藏                  |
-| POST   | /api/projects/:id/exports     | format=cover或bundle，revision必填        |
-| GET    | /api/jobs/:id                 | queued/running/succeeded/failed及下载地址 |
-| GET    | /api/jobs/:id/download        | 获取已经生成的PNG/ZIP                     |
+| 方法   | 地址                          | 作用                                         |
+| ------ | ----------------------------- | -------------------------------------------- |
+| GET    | /api/health                   | 健康检查                                     |
+| GET    | /api/auth/me                  | 当前登录用户，未登录返回null                 |
+| POST   | /api/auth/register            | name、email、password注册                    |
+| POST   | /api/auth/login               | email、password登录                          |
+| POST   | /api/auth/logout              | 退出会话                                     |
+| POST   | /api/auth/password            | currentPassword、password修改密码            |
+| GET    | /api/projects                 | 当前账号的项目                               |
+| POST   | /api/projects                 | 指定template创建项目                         |
+| GET    | /api/projects/:id             | 读取自己项目                                 |
+| PUT    | /api/projects/:id             | 保存完整document字段和revision               |
+| DELETE | /api/projects/:id             | 删除项目、发布快照与文件                     |
+| POST   | /api/projects/:id/assets      | multipart/form-data中的file字段上传          |
+| GET    | /api/assets/:id               | 仅作者可读的文件                             |
+| POST   | /api/projects/:id/publish     | 发布指定revision（visibility可选），返回slug |
+| DELETE | /api/projects/:id/publication | 撤回公开展示                                 |
+| PUT    | /api/projects/:id/publication | visibility=public或private，不重新发布       |
+| GET    | /api/publications?offset=0    | 已发布且公开的项目摘要，一页最多50个         |
+| GET    | /api/publications/:slug       | 完整公开项目快照；私密作品仅作者与管理员     |
+| GET    | /api/public-assets/:slug/:id  | 快照中允许公开的资产                         |
+| GET    | /api/bookmarks                | 当前账号收藏ID列表                           |
+| PUT    | /api/bookmarks/:id            | saved=true/false更新收藏                     |
+| POST   | /api/projects/:id/exports     | format=cover或bundle，revision必填           |
+| GET    | /api/jobs/:id                 | queued/running/succeeded/failed及下载地址    |
+| GET    | /api/jobs/:id/download        | 获取已经生成的PNG/ZIP                        |
+
+### 站点管理（/api/admin/*）
+
+管理员由环境变量 ADMIN_EMAILS 指定（逗号分隔的邮箱，大小写不敏感），没有角色表：改这个变量再重启就能授权或撤销。未登录访问401，非管理员403。这些接口能读写所有账号的数据，只填自己的邮箱。
+
+| 方法   | 地址                           | 作用                                       |
+| ------ | ------------------------------ | ------------------------------------------ |
+| GET    | /api/admin/overview            | 账号、项目、发布数、占用、磁盘剩余与配额   |
+| GET    | /api/admin/projects            | 全部项目，含作者、占用与公开范围           |
+| GET    | /api/admin/projects/:id/assets | 单个项目的文件清单与是否被文档引用         |
+| DELETE | /api/admin/assets/:id          | 删除一个文件，并同步清理草稿文档与发布快照 |
+| DELETE | /api/admin/projects/:id        | 删除项目及其全部文件、发布快照             |
+| DELETE | /api/admin/users/:id           | 删除账号及其全部文件（不能删除自己）       |
+| GET    | /api/admin/orphans             | 数据库无记录但仍在磁盘上的文件             |
+| DELETE | /api/admin/orphans             | 清理1小时以前的孤儿文件                    |
+
+## 公开范围
+
+publications.visibility 只有 public 与 private 两个值。private 作品不会出现在 /api/publications 列表里，只有作者本人与管理员能通过 /api/publications/:slug 与 /api/public-assets/:slug/:id 读取，对其他所有人（包括已登录的其他账号）都返回404，不泄露链接背后是否有内容。撤回不影响草稿；再次发布时不传 visibility 会沿用上一次的选择。
 
 ## 项目文档
 

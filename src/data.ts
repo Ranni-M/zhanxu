@@ -1,3 +1,23 @@
-export type { Project, ProjectImage, TemplateId } from './domain/project';
-export { createProject } from './domain/project';
+export type {
+  Project,
+  ProjectImage,
+  ProjectSection,
+  Attachment,
+  TemplateId,
+  SkeletonId,
+  PosterSizeId,
+  Colorway,
+  ProjectOption,
+  ComparePair,
+  ProjectMeta,
+  Birth,
+  BirthDay,
+} from './domain/project';
+export {
+  createProject,
+  coverImage,
+  emptyMeta,
+  skeletonOptions,
+  posterSizeOptions,
+} from './domain/project';
 export { categories, templates, samples } from './data/catalog';

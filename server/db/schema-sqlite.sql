@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL R
 CREATE INDEX IF NOT EXISTS projects_owner ON projects(owner_id,updated_at DESC);
 CREATE TABLE IF NOT EXISTS assets(id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,filename TEXT NOT NULL UNIQUE,original_name TEXT NOT NULL,mime TEXT NOT NULL,kind TEXT NOT NULL,bytes INTEGER NOT NULL,created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS assets_project ON assets(project_id);
-CREATE TABLE IF NOT EXISTS publications(slug TEXT PRIMARY KEY,project_id TEXT NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,snapshot TEXT NOT NULL,revision INTEGER NOT NULL,published_at INTEGER NOT NULL,is_live INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS publications(slug TEXT PRIMARY KEY,project_id TEXT NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,snapshot TEXT NOT NULL,revision INTEGER NOT NULL,published_at INTEGER NOT NULL,is_live INTEGER NOT NULL DEFAULT 1,visibility TEXT NOT NULL DEFAULT 'public');
 CREATE TABLE IF NOT EXISTS export_jobs(id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,revision INTEGER NOT NULL,format TEXT NOT NULL,snapshot TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'queued',result_filename TEXT,error TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,UNIQUE(project_id,revision,format));
-CREATE TABLE IF NOT EXISTS bookmarks(user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,project_id TEXT NOT NULL,PRIMARY KEY(user_id,project_id));
-PRAGMA user_version = 1;
+CREATE TABLE IF NOT EXISTS bookmarks(user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,PRIMARY KEY(user_id,project_id));
+-- 出生证明：每个项目每天一条，热力图直接读它
+CREATE TABLE IF NOT EXISTS activity(project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,day TEXT NOT NULL,count INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(project_id,day));
+PRAGMA user_version = 4;

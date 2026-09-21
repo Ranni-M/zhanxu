@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   ArrowUpRight,
   FilePdf,
@@ -7,6 +8,10 @@ import {
   Link as LinkIcon,
 } from '@phosphor-icons/react';
 import type { Project, ProjectImage } from '../data';
+import { coverImage } from '../data';
+import { colorwaySrc } from '../lib/colorway';
+import BirthCertificate from './BirthCertificate';
+import CompareSlider from './CompareSlider';
 export default function Showcase({
   project,
   onUse,
@@ -18,16 +23,35 @@ export default function Showcase({
   embedded?: boolean;
 }) {
   const Heading = embedded ? 'h2' : 'h1';
+  const [optionId, setOptionId] = useState('');
+  const [colorwayId, setColorwayId] = useState('');
   const attachments = project.attachments || [],
     videos = attachments.filter((a) => a.kind === 'video' && a.visible),
     documents = attachments.filter((a) => a.kind !== 'video' && a.visible);
   const sections = project.sections || [];
+  const colorways = project.colorways || [];
+  const options = project.options || [];
+  const compares = project.compares || [];
+  const cover = coverImage(project);
+  const option = options.find((item) => item.id === optionId);
+  const colorway = colorways.find((item) => item.id === colorwayId);
+  const painted = (src: string) => colorwaySrc(src, colorway);
+  // 选中的方案决定图库里出现哪些图；没选就展示全部
+  const scoped = option
+    ? project.images.filter((image) => option.imageIds.includes(image.id))
+    : project.images;
   const grouped = new Set(sections.flatMap((section) => section.imageIds));
-  const gallery = project.images.slice(1).filter((image) => !grouped.has(image.id));
+  const gallery = scoped.filter((image) => image.id !== cover?.id && !grouped.has(image.id));
+  function chooseOption(id: string) {
+    setOptionId(id);
+    // 换方案时连带换成这套方案指定的材质配色，省一次点击
+    const next = options.find((item) => item.id === id);
+    setColorwayId(next?.colorwayId || '');
+  }
   function figure(image: ProjectImage) {
     return (
       <figure key={image.id}>
-        <img src={image.src} alt={image.name} loading="lazy" />
+        <img src={painted(image.src)} alt={image.name} loading="lazy" />
         <figcaption>{image.name}</figcaption>
       </figure>
     );
@@ -70,10 +94,64 @@ export default function Showcase({
           )}
         </div>
       )}
-      {project.images[0] ? (
-        <img className="showcase-hero" src={project.images[0].src} alt={project.images[0].name} />
+      {cover ? (
+        <img className="showcase-hero" src={painted(cover.src)} alt={cover.name} />
       ) : (
         <div className="project-image-empty">上传第一张图片，作为项目的开场。</div>
+      )}
+      {(options.length > 0 || colorways.length > 0) && (
+        <div className="variant-bar">
+          {options.length > 0 && (
+            <div className="variant-group">
+              <span className="variant-label">方案</span>
+              <div className="variant-chips">
+                <button
+                  className={'chip' + (optionId === '' ? ' selected' : '')}
+                  aria-pressed={optionId === ''}
+                  onClick={() => chooseOption('')}
+                >
+                  全部
+                </button>
+                {options.map((item) => (
+                  <button
+                    key={item.id}
+                    className={'chip' + (optionId === item.id ? ' selected' : '')}
+                    aria-pressed={optionId === item.id}
+                    onClick={() => chooseOption(item.id)}
+                  >
+                    {item.label || '未命名方案'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {colorways.length > 0 && (
+            <div className="variant-group">
+              <span className="variant-label">材质</span>
+              <div className="variant-chips">
+                <button
+                  className={'chip' + (colorwayId === '' ? ' selected' : '')}
+                  aria-pressed={colorwayId === ''}
+                  onClick={() => setColorwayId('')}
+                >
+                  原色
+                </button>
+                {colorways.map((item) => (
+                  <button
+                    key={item.id}
+                    className={'chip has-dot' + (colorwayId === item.id ? ' selected' : '')}
+                    aria-pressed={colorwayId === item.id}
+                    onClick={() => setColorwayId(item.id)}
+                  >
+                    <span className="chip-dot" style={{ background: item.color }} />
+                    {item.label || '未命名配色'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {option?.note && <p className="variant-note">{option.note}</p>}
+        </div>
       )}
       <nav className="project-outline" aria-label="项目内容">
         <a href="#project-background">项目介绍</a>
@@ -83,7 +161,9 @@ export default function Showcase({
             {section.title}
           </a>
         ))}
+        {compares.length > 0 && <a href="#project-compare">改动对比</a>}
         {documents.length > 0 && <a href="#project-documents">完整资料</a>}
+        {project.birth && project.birth.days.length > 0 && <a href="#project-birth">创作历程</a>}
       </nav>
       <div className="showcase-story" id="project-background">
         <h3>关于这个项目</h3>
@@ -119,6 +199,27 @@ export default function Showcase({
               <figcaption>{video.caption || video.name}</figcaption>
             </figure>
           ))}
+        </section>
+      )}
+      {compares.length > 0 && (
+        <section className="showcase-section" id="project-compare">
+          <h3>改动对比</h3>
+          <p className="section-note">按住中间的滑杆左右拖动，看改版前后的差别。</p>
+          <div className="compare-list">
+            {compares.map((pair) => {
+              const before = project.images.find((image) => image.id === pair.before);
+              const after = project.images.find((image) => image.id === pair.after);
+              if (!before || !after) return null;
+              return (
+                <CompareSlider
+                  key={pair.id}
+                  before={painted(before.src)}
+                  after={painted(after.src)}
+                  label={pair.label || undefined}
+                />
+              );
+            })}
+          </div>
         </section>
       )}
       {sections.map((section) => (
@@ -162,6 +263,11 @@ export default function Showcase({
             ))}
           </div>
         </section>
+      )}
+      {project.birth && project.birth.days.length > 0 && (
+        <div id="project-birth">
+          <BirthCertificate birth={project.birth} compact />
+        </div>
       )}
       {onUse && !embedded && (
         <div className="showcase-actions">

@@ -118,6 +118,8 @@ TRUST_PROXY=1
 MAX_USER_STORAGE_MB=500
 # 先保持 true 以便你注册第一个账号；注册完成后改成 false 再 systemctl restart zhanxu
 ALLOW_REGISTRATION=true
+# 想用网页端的站点管理页（看占用、删文件/项目/账号）就填自己的邮箱，多个用逗号分隔
+# ADMIN_EMAILS=you@example.com
 EOF
 	else
 		cat >"$ENV_FILE" <<EOF
@@ -133,6 +135,8 @@ COOKIE_SECURE=false
 MAX_USER_STORAGE_MB=500
 # 先保持 true 以便你注册第一个账号；注册完成后改成 false 再 systemctl restart zhanxu
 ALLOW_REGISTRATION=true
+# 想用网页端的站点管理页（看占用、删文件/项目/账号）就填自己的邮箱，多个用逗号分隔
+# ADMIN_EMAILS=you@example.com
 EOF
 	fi
 	chown "$APP_USER:$APP_USER" "$ENV_FILE"
@@ -193,5 +197,7 @@ $(if [[ -n "$DOMAIN" ]]; then echo "访问地址：https://$DOMAIN"; else echo "
      再执行 sudo systemctl restart zhanxu，防止陌生人注册占用你的磁盘
   3. 把 .env 里的 PUBLIC_ORIGIN 与实际访问地址核对一致（协议+域名/端口必须完全一致）
   4. 首次公开前先自己走一遍：上传素材 → 发布 → 匿名窗口打开公开链接 → 导出封面
+  5. 要用网页端管理页（查看占用、删除文件/项目/账号）就把 $ENV_FILE 里的
+     ADMIN_EMAILS 填成你的邮箱，再 sudo systemctl restart zhanxu
 ================================================================
 EOF

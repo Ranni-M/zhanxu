@@ -9,6 +9,9 @@ import net from 'node:net';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { AxeBuilder } from '@axe-core/playwright';
+import { zipSync, strToU8 } from 'fflate';
+import { PDFDocument } from 'pdf-lib';
+import { Buffer } from 'node:buffer';
 const out = path.resolve('output/playwright');
 await mkdir(out, { recursive: true });
 const data = await mkdtemp(path.join(os.tmpdir(), 'zhanxu-ui-'));
@@ -183,7 +186,7 @@ try {
   await page.getByText('项目已保存到账号。', { exact: true }).waitFor();
   pass('未保存编辑的页面恢复');
   await page.getByRole('button', { name: '发布项目', exact: true }).click();
-  await page.getByRole('button', { name: '确认发布', exact: true }).click();
+  await page.getByRole('button', { name: '确认公开发布', exact: true }).click();
   await page.getByLabel('公开展示链接', { exact: true }).waitFor();
   const publicLink = await page.getByLabel('公开展示链接', { exact: true }).inputValue();
   await page.screenshot({ path: path.join(out, 'editor-desktop.png'), fullPage: true });
@@ -211,7 +214,7 @@ try {
   await page.getByRole('button', { name: '作品素材', exact: true }).click();
   await page.getByLabel('发布时允许访客查看或下载').first().check();
   await page.getByRole('button', { name: '更新发布', exact: true }).click();
-  await page.getByRole('button', { name: '确认发布', exact: true }).click();
+  await page.getByRole('button', { name: '确认公开发布', exact: true }).click();
   await page.getByLabel('公开展示链接', { exact: true }).waitFor();
   await publicPage.reload();
   await publicPage.locator('.document-link').waitFor();
@@ -237,6 +240,23 @@ try {
     'PK',
   );
   pass('浏览器下载真实PNG封面与分页图文ZIP');
+  await page.waitForFunction(() => !document.querySelector('.operation-status'));
+  await page.getByLabel('导出形式', { exact: true }).selectOption('pdf');
+  event = page.waitForEvent('download', { timeout: 180000 });
+  await page.getByRole('button', { name: '导出作品集 PDF', exact: true }).click();
+  download = await event;
+  const suggested = download.suggestedFilename();
+  await download.saveAs(path.join(out, 'export-portfolio.pdf'));
+  const pdfBytes = await readFile(path.join(out, 'export-portfolio.pdf'));
+  assert.equal(pdfBytes.subarray(0, 5).toString(), '%PDF-');
+  assert.match(suggested, /作品集\.pdf$/);
+  const portfolio = await PDFDocument.load(pdfBytes);
+  assert.ok(portfolio.getPageCount() >= 4, 'PDF 页数 ' + portfolio.getPageCount());
+  assert.ok(
+    (await page.locator('.publish-qr img').count()) === 1,
+    '公开作品的展台二维码应该显示出来',
+  );
+  pass('浏览器下载作品集PDF，并显示展台二维码');
   await page.waitForFunction(() => !document.querySelector('.operation-status'));
   await page.getByRole('button', { name: '返回我的作品', exact: true }).click();
   await page.getByRole('button', { name: '栖居之间：完整项目展示', exact: true }).waitFor();
@@ -276,6 +296,22 @@ try {
   );
   await phone.screenshot({ path: path.join(out, 'editor-mobile.png'), fullPage: true });
   pass('手机编辑器素材与发布入口');
+  assert.deepEqual(
+    await phone.locator('.canvas-stage').evaluate((el) => {
+      const style = getComputedStyle(el);
+      const chain = [...document.querySelectorAll('.canvas-stage,.editor-canvas')].filter(
+        (node) => getComputedStyle(node).overflowY !== 'visible',
+      ).length;
+      return {
+        overflowY: style.overflowY,
+        overscroll: style.overscrollBehaviorY,
+        scrollHosts: chain,
+      };
+    }),
+    { overflowY: 'visible', overscroll: 'auto', scrollHosts: 0 },
+    '手机端画布不能自己变成滚动容器，否则手指放在封面图上滑不动页面',
+  );
+  pass('手机端画布不吞滚动手势');
   await phone.goto(base);
   await phone.locator('.hero-copy').waitFor();
 
@@ -303,11 +339,155 @@ try {
   pass('公开项目页自动无障碍检查');
   await page.goto(studioUrl);
   await page.getByRole('button', { name: '发布导出', exact: true }).click();
+  await page.locator('input[value="private"]').check();
+  await page
+    .getByText('已改为私密：链接不再出现在发现页，只有你登录后能打开。', { exact: true })
+    .waitFor();
+  await publicPage.goto(publicLink);
+  await publicPage.getByRole('heading', { name: '这个作品暂时无法访问。' }).waitFor();
+  await publicPage.goto(base);
+  await publicPage.getByLabel('搜索作品', { exact: true }).waitFor();
+  assert.equal(await publicPage.getByText('栖居之间：完整项目展示').count(), 0);
+  await page.goto(publicLink);
+  await page.getByRole('heading', { name: '栖居之间：完整项目展示', level: 1 }).waitFor();
+  pass('私密发布：匿名访客打不开链接也搜不到，作者本人仍可预览');
+  await page.goto(studioUrl);
+  await page.getByRole('button', { name: '发布导出', exact: true }).click();
+  await page.locator('input[value="public"]').check();
+  await page.getByText('已改为公开：任何人可以访问，并会出现在发现页。', { exact: true }).waitFor();
+  await publicPage.goto(publicLink);
+  await publicPage.getByRole('heading', { name: '栖居之间：完整项目展示', level: 1 }).waitFor();
+  pass('切回公开后匿名访客恢复访问');
+  await page.goto(studioUrl);
+  await page.getByRole('button', { name: '发布导出', exact: true }).click();
   await page.getByRole('button', { name: '撤回公开展示', exact: true }).click();
   await page.getByText('项目已撤回，草稿仍然保留。', { exact: true }).waitFor();
   await publicPage.reload();
   await publicPage.getByRole('heading', { name: '这个作品暂时无法访问。' }).waitFor();
   pass('撤回后原链接不再公开');
+  // 零填写导入：一个真实压缩包丢进首页，应该自己去建项目、传图、回填文字
+  const importImages = await Promise.all(
+    ['封面主视觉.png', '过程记录-01.png'].map(async (name, index) => [
+      name,
+      await sharp({
+        create: {
+          width: 1400,
+          height: 900,
+          channels: 3,
+          background: index ? '#3e5549' : '#ce4c30',
+        },
+      })
+        .jpeg()
+        .toBuffer(),
+    ]),
+  );
+  const importZip = zipSync({
+    '潮汐来信/README.md': strToU8(
+      [
+        '# 潮汐来信',
+        '',
+        'LETTERS FROM THE SEA',
+        '',
+        '## 项目简介',
+        '',
+        '把海面的细微波动转化为视觉语言，作品由三组实时影像与一组实体装置组成，观众的手势会影响潮汐的涨落节奏。',
+        '',
+        '作者：林小满',
+        '指导教师：陈思远',
+        '学校：中国美术学院',
+        '展位号：B-12',
+        '',
+        '演示地址：https://demo.example.com/tide',
+        '源码：https://github.com/example/tide',
+        '',
+      ].join('\n'),
+    ),
+    '潮汐来信/素材/封面主视觉.png': new Uint8Array(importImages[0][1] as Buffer),
+    '潮汐来信/素材/过程记录-01.png': new Uint8Array(importImages[1][1] as Buffer),
+    '潮汐来信/node_modules/react/index.js': strToU8('module.exports = {};'),
+  });
+  const importPath = path.join(out, 'import-fixture.zip');
+  await writeFile(importPath, Buffer.from(importZip));
+  await page.goto(base);
+  await page.locator('.hero-art .poster-image img').first().waitFor();
+  await page.setInputFiles('.import-button input[type=file]', importPath);
+  await page.waitForURL(/\/studio\//, { timeout: 120000 });
+  await page.getByLabel('项目名称 *', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('项目名称 *', { exact: true }).inputValue(), '潮汐来信');
+  assert.equal(
+    await page.getByLabel('英文标题 / 副标题', { exact: true }).inputValue(),
+    'LETTERS FROM THE SEA',
+  );
+  assert.match(
+    await page.getByPlaceholder('背景、目标、解决的问题，以及最终成果。').inputValue(),
+    /把海面的细微波动转化为视觉语言/,
+  );
+  assert.equal(await page.getByLabel('创作者', { exact: true }).inputValue(), '林小满');
+  assert.equal(await page.getByLabel('作品方向', { exact: true }).inputValue(), '数字媒体');
+  assert.match(await page.getByPlaceholder('https://…').inputValue(), /demo\.example\.com\/tide$/);
+  assert.match(
+    await page.getByPlaceholder('https://github.com/…').inputValue(),
+    /github\.com\/example\/tide/,
+  );
+  await page.getByRole('button', { name: '方案与配色', exact: true }).click();
+  assert.equal(await page.getByLabel('指导教师', { exact: true }).inputValue(), '陈思远');
+  assert.equal(await page.getByLabel('展位', { exact: true }).inputValue(), 'B-12');
+  await page.getByRole('button', { name: '分享封面', exact: true }).click();
+  const posterWidth = await page
+    .locator('.poster-image img')
+    .first()
+    .evaluate((el: HTMLImageElement) => el.naturalWidth);
+  assert.ok(posterWidth > 400, '自动生成的海报宽度 ' + posterWidth);
+  await page.getByRole('button', { name: '作品素材', exact: true }).click();
+  await page.getByText('2 / 24 张图片', { exact: true }).waitFor();
+  await page.screenshot({ path: path.join(out, 'studio-imported.png'), fullPage: true });
+  pass('零填写导入：压缩包自动变出填好的作品页');
+  // 游客模式：一个干净的浏览器（未登录）也能建草稿、导出海报，只有发布要账号
+  const guestContext = await browser.newContext({
+    viewport: { width: 1440, height: 1000 },
+    colorScheme: 'light',
+    acceptDownloads: true,
+  });
+  const guest = await guestContext.newPage();
+  guest.on('pageerror', (e) => errors.push(e.message));
+  await guest.goto(base);
+  await guest.getByRole('button', { name: '创建作品', exact: true }).first().click();
+  await guest.waitForURL(/\/studio\//, { timeout: 60000 });
+  await guest.getByLabel('项目名称 *', { exact: true }).fill('游客草稿');
+  await guest.getByLabel('创作者', { exact: true }).fill('路过的人');
+  await guest.getByRole('button', { name: '保存修改', exact: true }).click();
+  await guest.getByText('草稿已保存在这台浏览器。', { exact: true }).waitFor();
+  await guest.getByRole('button', { name: '发布导出', exact: true }).click();
+  await guest.getByText('游客模式：草稿存在这台浏览器里', { exact: true }).waitFor();
+  assert.equal(
+    await guest.getByRole('button', { name: '发布项目', exact: true }).count(),
+    0,
+    '游客不应该看到发布按钮',
+  );
+  await guest.getByLabel('导出形式', { exact: true }).selectOption('pdf');
+  let guestDownload = guest.waitForEvent('download', { timeout: 180000 });
+  await guest.getByRole('button', { name: '导出作品集 PDF', exact: true }).click();
+  let downloaded = await guestDownload;
+  await downloaded.saveAs(path.join(out, 'guest-portfolio.pdf'));
+  const guestPdf = await readFile(path.join(out, 'guest-portfolio.pdf'));
+  assert.equal(guestPdf.subarray(0, 5).toString(), '%PDF-');
+  assert.match(downloaded.suggestedFilename(), /作品集\.pdf$/);
+  assert.ok(
+    (await PDFDocument.load(guestPdf)).getPageCount() >= 2,
+    '游客作品集应该也能导出完整页数',
+  );
+  await guest.screenshot({ path: path.join(out, 'guest-publish.png'), fullPage: true });
+  await guest.getByRole('button', { name: '返回我的作品', exact: true }).click();
+  await guest.getByText('当前是游客模式', { exact: true }).waitFor();
+  await guest.screenshot({ path: path.join(out, 'guest-works.png'), fullPage: true });
+  await guest.getByRole('button', { name: '登录并接收草稿', exact: true }).click();
+  await guest.getByLabel('邮箱', { exact: true }).fill('ui@example.test');
+  await guest.locator('input[autocomplete="current-password"]').fill('full-project-test-password');
+  await guest.getByRole('button', { name: '登录', exact: true }).last().click();
+  await guest.getByText('已把 1 份浏览器草稿搬进账号。', { exact: true }).waitFor();
+  await guest.getByRole('button', { name: '游客草稿', exact: true }).waitFor();
+  await guestContext.close();
+  pass('游客模式：不登录就能建草稿、导出作品集，发布引导登录，登录后草稿自动搬进账号');
   assert.equal(errors.length, 0, errors.join('\n'));
   await writeFile(
     path.join(out, 'e2e-results.json'),

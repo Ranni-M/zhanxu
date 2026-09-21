@@ -6,11 +6,12 @@ import { ZodError } from 'zod';
 import multer from 'multer';
 import path from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
-import { config } from './config.ts';
+import { config, mb } from './config.ts';
 import { db } from './db/index.ts';
 import { auth, identify } from './auth.ts';
 import { projects } from './projects.ts';
-import { assets } from './assets.ts';
+import { assets, sweepDerived } from './assets.ts';
+import { admin } from './admin.ts';
 import { publications } from './publications.ts';
 import { exportsApi, startExports, stopExports } from './exports.ts';
 import { HttpError } from './http.ts';
@@ -38,6 +39,11 @@ app.use(
     hsts: config.origin.startsWith('https:') ? undefined : false,
   }),
 );
+// helmet 8 不再提供 permissionsPolicy，这里手动补一条最小授权。
+app.use((_req, res, next) => {
+  res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  next();
+});
 app.use(cookieParser());
 app.use('/api', (_req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -75,6 +81,7 @@ app.use(identify);
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', auth);
 app.use('/api/projects', projects);
+app.use('/api/admin', admin);
 app.use('/api', assets, publications, exportsApi);
 app.use('/api', (_req, _res, next) => next(new HttpError(404, '接口不存在。')));
 const dist = path.resolve('dist');
@@ -108,7 +115,9 @@ app.use((error: any, _req: express.Request, res: express.Response, next: express
   if (error instanceof multer.MulterError)
     return res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({
       error:
-        error.code === 'LIMIT_FILE_SIZE' ? '文件不能超过100MB。' : '上传失败，每次请选择一个文件。',
+        error.code === 'LIMIT_FILE_SIZE'
+          ? `文件不能超过${mb(config.uploads.request)}MB。`
+          : '上传失败，每次请选择一个文件。',
     });
   if (error instanceof HttpError) return res.status(error.status).json({ error: error.message });
   if (error.type === 'entity.too.large') return res.status(413).json({ error: '提交内容过大。' });
@@ -120,8 +129,9 @@ app.use((error: any, _req: express.Request, res: express.Response, next: express
 const server = app.listen(config.port, config.host, () => {
   console.log('ZHANXU server: http://' + config.host + ':' + config.port);
   startExports();
+  void sweepDerived();
 });
-server.requestTimeout = 180000;
+server.requestTimeout = config.requestTimeoutMs;
 function shutdown() {
   stopExports();
   server.close(() => {

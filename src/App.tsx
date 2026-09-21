@@ -27,13 +27,18 @@ import {
   SignOut,
 } from '@phosphor-icons/react';
 import type { Project, TemplateId } from './data';
-import { samples } from './data';
-import { api, message } from './lib/api';
+import { createProject, samples } from './data';
+import { api, message, uploadAsset } from './lib/api';
+import { readArchive } from './lib/archive';
+import { putAsset, dataUrlFile } from './services/asset-service';
+import { projectService, setGuestMode } from './services/project-service';
+import { readGuestProjects, clearGuestProjects } from './infrastructure/local-project-repository';
 import type { User } from './lib/api';
 import Home from './pages/Home';
 import Templates from './pages/Templates';
 import Works from './pages/Works';
 import Account from './pages/Account';
+import Admin from './pages/Admin';
 import AuthDialog from './components/AuthDialog';
 import Showcase from './components/Showcase';
 const Editor = lazy(() => import('./components/Editor'));
@@ -65,7 +70,10 @@ function Application() {
     [menu, setMenu] = useState(false),
     [guide, setGuide] = useState(false),
     [toast, setToast] = useState(''),
-    [creating, setCreating] = useState(false);
+    [creating, setCreating] = useState(false),
+    [worksKey, setWorksKey] = useState(0);
+  const [importing, setImporting] = useState(false),
+    [importText, setImportText] = useState('');
   const [published, setPublished] = useState<Project[]>([]),
     [nextOffset, setNextOffset] = useState<number | null>(null),
     [bookmarks, setBookmarks] = useState<string[]>([]);
@@ -89,7 +97,9 @@ function Application() {
   async function session() {
     setSessionLoading(true);
     try {
-      setUser((await api.me()).user);
+      const next = (await api.me()).user;
+      setUser(next);
+      setGuestMode(!next);
       setServerError('');
     } catch (e) {
       setServerError(message(e));
@@ -153,12 +163,121 @@ function Application() {
       setCreating(false);
     }
   }
+  /**
+   * 零填写导入：压缩包 → 规则解析 → 自动建项目、传图、回填文字。
+   * 解析全部在浏览器里做（见 lib/archive.ts），服务端只负责存。
+   */
+  async function importArchive(file: File) {
+    if (!/\.zip$/i.test(file.name)) {
+      notify('先把文件夹压成 .zip 再拖进来，其他格式还在路上。');
+      return;
+    }
+    setImporting(true);
+    setImportText('正在打开压缩包…');
+    try {
+      // 游客也能用：没有账号就建一个只存在这台浏览器里的草稿
+      const created = user
+        ? (await api.create('editorial')).project
+        : await projectService.save({ ...createProject(), title: '未命名作品' });
+      const id = created.id;
+      const parsed = await readArchive(file, setImportText);
+      const images: Project['images'] = [];
+      for (const [index, image] of parsed.images.entries()) {
+        setImportText('正在上传图片 ' + (index + 1) + ' / ' + parsed.images.length);
+        const uploaded = await putAsset(id, image, () => {});
+        if (uploaded.kind === 'image')
+          images.push({ id: uploaded.id, src: uploaded.src, name: uploaded.name });
+      }
+      setImportText('正在生成展示页…');
+      const filled = { ...created, ...parsed.patch, images };
+      if (user) await api.save(filled);
+      else await projectService.save(filled);
+      notify(parsed.notice);
+      navigate('/studio/' + id);
+    } catch (e) {
+      notify(message(e));
+    } finally {
+      setImporting(false);
+      setImportText('');
+    }
+  }
+  /**
+   * 游客模式：不登录也能开工。草稿进浏览器，导出在本地算，只有发布要账号。
+   */
+  async function startGuest(template: TemplateId) {
+    clearTimeout(timer.current);
+    const draft = await projectService.save({ ...createProject(), template, title: '未命名作品' });
+    navigate('/studio/' + draft.id);
+  }
   function start(template: TemplateId = 'editorial') {
     if (!user) {
-      signIn(() => void createRemote(template));
+      setGuestMode(true);
+      void startGuest(template);
       return;
     }
     void createRemote(template);
+  }
+  /** 登录后把浏览器里的草稿搬进账号：图片重新上传，随后清掉本地副本 */
+  async function migrateGuestDrafts() {
+    const drafts = await readGuestProjects();
+    if (!drafts.length) return 0;
+    let moved = 0;
+    for (const draft of drafts) {
+      try {
+        const created = (await api.create(draft.template)).project;
+        const images: Project['images'] = [];
+        const remap = new Map<string, string>();
+        for (const [index, image] of draft.images.entries()) {
+          if (!image.src.startsWith('data:')) {
+            images.push(image);
+            continue;
+          }
+          const file = await dataUrlFile(image.src, image.name || 'image-' + (index + 1));
+          const uploaded = await uploadAsset(created.id, file, () => {});
+          if (uploaded.kind !== 'image') continue;
+          remap.set(image.id, uploaded.id);
+          images.push({ id: uploaded.id, src: uploaded.src, name: uploaded.name });
+        }
+        const ids = (list: string[]) => list.map((id) => remap.get(id) || id).filter(Boolean);
+        await api.save({
+          ...created,
+          title: draft.title,
+          subtitle: draft.subtitle,
+          author: draft.author,
+          category: draft.category,
+          year: draft.year,
+          intro: draft.intro,
+          process: draft.process,
+          role: draft.role,
+          tools: draft.tools,
+          demoUrl: draft.demoUrl,
+          repositoryUrl: draft.repositoryUrl,
+          template: draft.template,
+          coverIndex: draft.coverIndex,
+          skeleton: draft.skeleton,
+          posterSize: draft.posterSize,
+          meta: draft.meta,
+          colorways: draft.colorways,
+          options: (draft.options || []).map((o) => ({ ...o, imageIds: ids(o.imageIds) })),
+          compares: (draft.compares || []).map((c) => ({
+            ...c,
+            before: remap.get(c.before) || c.before,
+            after: remap.get(c.after) || c.after,
+          })),
+          sections: (draft.sections || []).map((s) => ({ ...s, imageIds: ids(s.imageIds) })),
+          images,
+          attachments: [],
+        });
+        moved++;
+      } catch (e) {
+        notify('有一份本地草稿没能搬进账号：' + message(e));
+      }
+    }
+    if (moved) {
+      await clearGuestProjects();
+      notify('已把 ' + moved + ' 份浏览器草稿搬进账号。');
+    }
+    return moved;
   }
   function openProject(project: Project) {
     navigate(project.sample ? '/demo/' + project.id : '/p/' + project.publishedSlug);
@@ -210,6 +329,7 @@ function Application() {
       </NavLink>
       <NavLink to="/templates">展示模板</NavLink>
       <NavLink to="/works">我的作品</NavLink>
+      {user?.isAdmin && <NavLink to="/admin">站点管理</NavLink>}
     </>
   );
   return (
@@ -318,6 +438,9 @@ function Application() {
                 onUse={(p) => navigate('/demo/' + p.id)}
                 onTemplates={() => navigate('/templates')}
                 onBookmark={bookmark}
+                onImportZip={(file) => void importArchive(file)}
+                importing={importing}
+                importText={importText}
                 nextOffset={nextOffset}
                 onLoadMore={() => {
                   if (nextOffset !== null) void refreshPublic(nextOffset);
@@ -331,13 +454,16 @@ function Application() {
           />
           <Route
             path="/works"
-            element={protectedPage(
+            element={
               <Works
+                key={worksKey}
+                guest={!user}
                 start={() => start()}
+                onSignIn={() => signIn()}
                 onEdit={(p) => navigate('/studio/' + p.id)}
                 onToast={notify}
-              />,
-            )}
+              />
+            }
           />
           <Route
             path="/account"
@@ -345,8 +471,28 @@ function Application() {
           />
           <Route
             path="/studio/:id"
+            element={
+              <Studio
+                guest={!user}
+                onSaved={() => void refreshPublic()}
+                onSignIn={() => signIn()}
+                onToast={notify}
+              />
+            }
+          />
+          <Route
+            path="/admin"
             element={protectedPage(
-              <Studio onSaved={() => void refreshPublic()} onToast={notify} />,
+              user?.isAdmin ? (
+                <Admin onToast={notify} />
+              ) : (
+                <main className="container">
+                  <div className="empty-state">
+                    <h1>没有访问权限。</h1>
+                    <p>这个页面只对站点管理员开放。</p>
+                  </div>
+                </main>
+              ),
             )}
           />
           <Route path="/p/:slug" element={<PublicProject onUse={(p) => start(p.template)} />} />
@@ -387,6 +533,8 @@ function Application() {
         onOpenChange={setAuthOpen}
         onSuccess={(next) => {
           setUser(next);
+          setGuestMode(false);
+          void migrateGuestDrafts().then(() => setWorksKey((k) => k + 1));
           const action = pending.current;
           pending.current = null;
           action?.();
@@ -466,7 +614,17 @@ function Loading() {
     </div>
   );
 }
-function Studio({ onSaved, onToast }: { onSaved: () => void; onToast: (m: string) => void }) {
+function Studio({
+  guest,
+  onSaved,
+  onSignIn,
+  onToast,
+}: {
+  guest: boolean;
+  onSaved: () => void;
+  onSignIn: () => void;
+  onToast: (m: string) => void;
+}) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null),
@@ -475,8 +633,15 @@ function Studio({ onSaved, onToast }: { onSaved: () => void; onToast: (m: string
     let active = true;
     setProject(null);
     setError('');
-    api
-      .project(id!)
+    // 游客草稿在浏览器里，登录后的项目在服务端
+    const load = guest
+      ? projectService.list().then((list) => {
+          const found = list.find((item) => item.id === id);
+          if (!found) throw new Error('这台浏览器里没有这份草稿，可能是换了设备或清了缓存。');
+          return { project: found };
+        })
+      : api.project(id!);
+    load
       .then((r) => {
         if (active) setProject(r.project);
       })
@@ -486,7 +651,7 @@ function Studio({ onSaved, onToast }: { onSaved: () => void; onToast: (m: string
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, guest]);
   if (error)
     return (
       <div className="empty-state">
@@ -502,8 +667,10 @@ function Studio({ onSaved, onToast }: { onSaved: () => void; onToast: (m: string
       <Editor
         key={project.id}
         initial={project}
+        guest={guest}
         onBack={() => navigate('/works')}
         onSaved={onSaved}
+        onSignIn={onSignIn}
         onToast={onToast}
       />
     </Suspense>

@@ -4,11 +4,19 @@ import { randomUUID } from 'node:crypto';
 import { unlink } from 'node:fs/promises';
 import { z } from 'zod';
 import { db } from './db/index.ts';
+import { config } from './config.ts';
 import { owned } from './projects.ts';
 import { storedPath } from './assets.ts';
 import { HttpError, requireUser } from './http.ts';
 let active = false;
 let activeWorker: Worker | null = null;
+// 导出文件下载时的文件名后缀
+const suffixes: Record<string, string> = {
+  cover: '-封面.png',
+  bundle: '-图文展示包.zip',
+  pdf: '-作品集.pdf',
+};
+const suffix = (format: string) => suffixes[format] || '.bin';
 export function stopExports() {
   activeWorker?.terminate();
 }
@@ -29,9 +37,15 @@ async function drain() {
         Date.now(),
         job.id,
       );
-      const filename = randomUUID() + '.' + (job.format === 'cover' ? 'png' : 'zip');
+      const extension = job.format === 'cover' ? 'png' : job.format === 'pdf' ? 'pdf' : 'zip';
+      const filename = randomUUID() + '.' + extension;
       try {
         const project = JSON.parse(job.snapshot);
+        // 公开作品才把作品页地址印在封面上，私密作品扫不开
+        const url =
+          project.publishedSlug && project.publishedVisibility !== 'private'
+            ? config.origin.replace(/\/+$/, '') + '/p/' + project.publishedSlug
+            : '';
         project.images = project.images.map((image: any) => {
           const asset = db
             .prepare('SELECT filename FROM assets WHERE id=? AND project_id=?')
@@ -41,7 +55,7 @@ async function drain() {
         });
         await new Promise<void>((resolve, reject) => {
           const worker = new Worker(new URL('./export-worker.mjs', import.meta.url), {
-            workerData: { project, format: job.format, destination: storedPath(filename) },
+            workerData: { project, format: job.format, destination: storedPath(filename), url },
           });
           activeWorker = worker;
           let settled = false;
@@ -90,7 +104,7 @@ exportsApi.use(requireUser);
 exportsApi.post('/projects/:id/exports', (req, res) => {
   const row = owned(String(req.params.id), req.user!.id);
   const { format, revision } = z
-    .object({ format: z.enum(['cover', 'bundle']), revision: z.number().int() })
+    .object({ format: z.enum(['cover', 'bundle', 'pdf']), revision: z.number().int() })
     .parse(req.body);
   if (revision !== row.revision) throw new HttpError(409, '请先保存最新修改再导出。');
   const project = JSON.parse(row.document);
@@ -135,11 +149,7 @@ exportsApi.get('/jobs/:id/download', (req, res, next) => {
   if (!job || job.status !== 'succeeded') throw new HttpError(404, '导出文件尚未生成。');
   const title = JSON.parse(job.snapshot).title;
   res.set('Cache-Control', 'private, no-store');
-  res.download(
-    storedPath(job.result_filename),
-    title + (job.format === 'cover' ? '-封面.png' : '-图文展示包.zip'),
-    (error) => {
-      if (error) next(error);
-    },
-  );
+  res.download(storedPath(job.result_filename), title + suffix(job.format), (error) => {
+    if (error) next(error);
+  });
 });

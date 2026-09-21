@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { birth, recordActivity } from './activity.ts';
 import { db, transaction } from './db/index.ts';
 import { HttpError, requireUser } from './http.ts';
 export type ProjectRow = {
@@ -19,8 +20,9 @@ export function owned(id: string, owner: string): ProjectRow {
 }
 export function serialize(row: ProjectRow) {
   const publication = db
-    .prepare('SELECT slug,revision,is_live FROM publications WHERE project_id=?')
-    .get(row.id) as { slug: string; revision: number; is_live: number } | undefined;
+    .prepare('SELECT slug,revision,is_live,visibility FROM publications WHERE project_id=?')
+    .get(row.id) as
+    { slug: string; revision: number; is_live: number; visibility: string } | undefined;
   return {
     ...JSON.parse(row.document),
     id: row.id,
@@ -28,6 +30,11 @@ export function serialize(row: ProjectRow) {
     updatedAt: row.updated_at,
     publishedSlug: publication?.is_live ? publication.slug : undefined,
     publishedRevision: publication?.is_live ? publication.revision : undefined,
+    publishedVisibility: publication?.is_live
+      ? publication.visibility === 'public'
+        ? 'public'
+        : 'private'
+      : undefined,
   };
 }
 const url = z
@@ -49,6 +56,17 @@ const url = z
     '请输入完整的 http 或 https 地址。',
   )
   .default('');
+const templateIds = [
+  'editorial',
+  'gallery',
+  'bold',
+  'paper',
+  'ink',
+  'neon',
+  'kraft',
+  'mono',
+  'cobalt',
+] as const;
 const input = z.object({
   title: z.string().trim().min(1, '请填写项目名称。').max(64),
   subtitle: z.string().max(80).default(''),
@@ -69,7 +87,65 @@ const input = z.object({
   tools: z.string().max(250).default(''),
   demoUrl: url,
   repositoryUrl: url,
-  template: z.enum(['editorial', 'gallery', 'bold']),
+  template: z.enum(templateIds),
+  coverIndex: z.number().int().min(0).max(23).default(0),
+  skeleton: z
+    .enum(['auto', 'stack', 'banner', 'statement', 'split', 'grid', 'type-only'])
+    .default('auto'),
+  posterSize: z.enum(['a4', 'print', 'story', 'og', 'square']).default('a4'),
+  meta: z
+    .object({
+      school: z.string().max(80).default(''),
+      major: z.string().max(80).default(''),
+      advisor: z.string().max(80).default(''),
+      booth: z.string().max(40).default(''),
+      period: z.string().max(60).default(''),
+      tagline: z.string().max(120).default(''),
+    })
+    .default(() => ({ school: '', major: '', advisor: '', booth: '', period: '', tagline: '' })),
+  colorways: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        label: z.string().trim().max(24).default(''),
+        source: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/)
+          .default('#808080'),
+        hue: z.number().min(-180).max(180),
+        saturation: z.number().min(0.5).max(1.5),
+        brightness: z.number().min(0.5).max(1.5),
+        color: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/)
+          .default('#000000'),
+      }),
+    )
+    .max(8)
+    .default([]),
+  options: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        label: z.string().trim().max(24).default(''),
+        note: z.string().max(200).default(''),
+        imageIds: z.array(z.string().uuid()).max(24).default([]),
+        colorwayId: z.string().uuid().optional(),
+      }),
+    )
+    .max(6)
+    .default([]),
+  compares: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        label: z.string().trim().max(40).default(''),
+        before: z.string().uuid(),
+        after: z.string().uuid(),
+      }),
+    )
+    .max(6)
+    .default([]),
   revision: z.number().int().min(1),
   images: z.array(z.object({ id: z.string().uuid(), name: z.string().max(160) })).max(24),
   attachments: z
@@ -130,8 +206,25 @@ export function savedDocument(body: unknown, projectId: string) {
   for (const section of value.sections)
     if (section.imageIds.some((id) => !imageIds.has(id)))
       throw new HttpError(400, '模块引用了已移除的图片。');
+  // 方案与对比组引用到已删除的图片时静默收敛，不让一次误删把整次保存拦下来
+  const colorwayIds = new Set(value.colorways.map((c) => c.id));
+  const options = value.options
+    .map((option) => ({
+      ...option,
+      imageIds: option.imageIds.filter((id) => imageIds.has(id)),
+      colorwayId:
+        option.colorwayId && colorwayIds.has(option.colorwayId) ? option.colorwayId : undefined,
+    }))
+    .filter((option) => option.label && option.imageIds.length > 0);
+  const compares = value.compares.filter(
+    (pair) => imageIds.has(pair.before) && imageIds.has(pair.after) && pair.before !== pair.after,
+  );
+  const coverIndex = Math.min(Math.max(value.coverIndex, 0), Math.max(value.images.length - 1, 0));
   const { revision, ...rest } = value;
-  return { document: { ...rest, images, attachments }, revision };
+  return {
+    document: { ...rest, images, attachments, options, compares, coverIndex },
+    revision,
+  };
 }
 export const projects = Router();
 projects.use(requireUser);
@@ -143,7 +236,7 @@ projects.get('/', (req, res) => {
 });
 projects.post('/', (req, res) => {
   const { template } = z
-    .object({ template: z.enum(['editorial', 'gallery', 'bold']).default('editorial') })
+    .object({ template: z.enum(templateIds).default('editorial') })
     .parse(req.body);
   const count = db
     .prepare('SELECT count(*) as n FROM projects WHERE owner_id=?')
@@ -164,6 +257,13 @@ projects.post('/', (req, res) => {
     demoUrl: '',
     repositoryUrl: '',
     template,
+    coverIndex: 0,
+    skeleton: 'auto',
+    posterSize: 'a4',
+    meta: { school: '', major: '', advisor: '', booth: '', period: '', tagline: '' },
+    colorways: [],
+    options: [],
+    compares: [],
     images: [],
     attachments: [],
     sections: [],
@@ -181,6 +281,12 @@ projects.post('/', (req, res) => {
 projects.get('/:id', (req, res) =>
   res.json({ project: serialize(owned(String(req.params.id), req.user!.id)) }),
 );
+// 出生证明（创作热力图）。只给项目所有者，服务端算好再下发。
+projects.get('/:id/birth', (req, res) => {
+  const id = String(req.params.id);
+  owned(id, req.user!.id);
+  res.json({ birth: birth(id) });
+});
 projects.put('/:id', (req, res) => {
   const id = String(req.params.id);
   const row = owned(id, req.user!.id);
@@ -192,18 +298,24 @@ projects.put('/:id', (req, res) => {
     Date.now(),
     id,
   );
+  recordActivity(id);
   res.json({ project: serialize(owned(id, req.user!.id)) });
 });
 projects.post('/:id/publish', (req, res) => {
   const row = owned(String(req.params.id), req.user!.id);
-  const { revision } = z.object({ revision: z.number().int() }).parse(req.body);
+  const { revision, visibility } = z
+    .object({ revision: z.number().int(), visibility: z.enum(['public', 'private']).optional() })
+    .parse(req.body);
   if (row.revision !== revision) throw new HttpError(409, '项目已有新版本，请先刷新。');
   const document = JSON.parse(row.document);
   if (!document.title?.trim() || !document.images?.length || !document.intro?.trim())
     throw new HttpError(400, '发布前请填写项目名称、介绍，并上传至少一张封面图片。');
-  let pub = db.prepare('SELECT slug FROM publications WHERE project_id=?').get(row.id) as
-    { slug: string } | undefined;
+  let pub = db
+    .prepare('SELECT slug,visibility FROM publications WHERE project_id=?')
+    .get(row.id) as { slug: string; visibility: string } | undefined;
   const slug = pub?.slug || randomUUID();
+  // 客户端没传就沿用上一次的选择，不会把私密作品意外变回公开
+  const nextVisibility = visibility ?? (pub?.visibility === 'private' ? 'private' : 'public');
   const snapshot = {
     ...document,
     id: row.id,
@@ -211,9 +323,20 @@ projects.post('/:id/publish', (req, res) => {
     attachments: (document.attachments || []).filter((a: { visible: boolean }) => a.visible),
   };
   db.prepare(
-    'INSERT INTO publications VALUES(?,?,?,?,?,1) ON CONFLICT(project_id) DO UPDATE SET snapshot=excluded.snapshot,revision=excluded.revision,published_at=excluded.published_at,is_live=1',
-  ).run(slug, row.id, JSON.stringify(snapshot), revision, Date.now());
-  res.json({ slug, project: serialize(owned(row.id, req.user!.id)) });
+    'INSERT INTO publications(slug,project_id,snapshot,revision,published_at,is_live,visibility) VALUES(?,?,?,?,?,1,?) ON CONFLICT(project_id) DO UPDATE SET snapshot=excluded.snapshot,revision=excluded.revision,published_at=excluded.published_at,is_live=1,visibility=excluded.visibility',
+  ).run(slug, row.id, JSON.stringify(snapshot), revision, Date.now(), nextVisibility);
+  recordActivity(row.id);
+  res.json({ slug, visibility: nextVisibility, project: serialize(owned(row.id, req.user!.id)) });
+});
+// 不重新发布，只切换已发布作品的公开范围
+projects.put('/:id/publication', (req, res) => {
+  const row = owned(String(req.params.id), req.user!.id);
+  const { visibility } = z.object({ visibility: z.enum(['public', 'private']) }).parse(req.body);
+  const result = db
+    .prepare('UPDATE publications SET visibility=? WHERE project_id=? AND is_live=1')
+    .run(visibility, row.id);
+  if (!result.changes) throw new HttpError(404, '这个项目还没有发布。');
+  res.json({ visibility, project: serialize(owned(row.id, req.user!.id)) });
 });
 projects.delete('/:id/publication', (req, res) => {
   const row = owned(String(req.params.id), req.user!.id);

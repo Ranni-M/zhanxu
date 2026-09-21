@@ -269,6 +269,34 @@ test('完整账号、项目隔离、私有素材、发布快照与分页导出',
     assert.ok(zip.includes(Buffer.from('01-project.png')));
     assert.ok(zip.includes(Buffer.from('03-project.png')));
   });
+  await t.test('服务端生成作品集PDF，带目录页与装订边', async () => {
+    const result = await call(
+      '/projects/' + project.id + '/exports',
+      'POST',
+      { format: 'pdf', revision: project.revision },
+      owner,
+    );
+    assert.equal(result.status, 202);
+    const finished = await job(result.data.id, owner);
+    assert.equal(finished.status, 'succeeded', finished.error);
+    const response = await fetch(base + finished.downloadUrl, { headers: { Cookie: owner } });
+    assert.equal(response.status, 200);
+    // 下载文件名要能直接认出来是什么
+    assert.match(
+      decodeURIComponent(response.headers.get('content-disposition') || ''),
+      /-作品集\.pdf/,
+    );
+    const bytes = Buffer.from(await response.arrayBuffer());
+    assert.equal(bytes.subarray(0, 5).toString(), '%PDF-');
+    const { PDFDocument } = await import('pdf-lib');
+    const pdf = await PDFDocument.load(bytes);
+    // 封面 + 目录 + 正文若干页 + 每张图一页
+    assert.ok(pdf.getPageCount() >= 4, '页数 ' + pdf.getPageCount());
+    assert.equal(pdf.getTitle(), '修改后的草稿');
+    const width = pdf.getPage(0).getWidth();
+    assert.ok(Math.abs(width - 595.28) < 1, 'A4 宽度 ' + width);
+    for (const page of pdf.getPages()) assert.ok(page.node.Contents(), '每页都要有内容');
+  });
   await t.test('更新发布可公开完整PDF，撤回立即收回访问', async () => {
     project = (
       await call(

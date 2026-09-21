@@ -4,7 +4,7 @@ import { randomBytes, randomUUID, scrypt, timingSafeEqual, createHash } from 'no
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { db, transaction } from './db/index.ts';
-import { config, cookieName } from './config.ts';
+import { config, cookieName, isAdminEmail } from './config.ts';
 import { HttpError, requireUser } from './http.ts';
 const hashToken = (s: string) => createHash('sha256').update(s).digest('hex');
 const derive = (password: string, salt: string) =>
@@ -60,7 +60,9 @@ const credentials = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   password: z.string().min(10, '密码至少需要 10 个字符。').max(128),
 });
-auth.get('/me', (req, res) => res.json({ user: req.user || null }));
+auth.get('/me', (req, res) =>
+  res.json({ user: req.user ? { ...req.user, isAdmin: isAdminEmail(req.user.email) } : null }),
+);
 auth.post('/register', authLimit, async (req, res) => {
   if (process.env.ALLOW_REGISTRATION === 'false')
     throw new HttpError(403, '当前站点暂不开放注册。');

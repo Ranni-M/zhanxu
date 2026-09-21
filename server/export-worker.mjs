@@ -5,24 +5,43 @@ import { writeFile, rename, unlink } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import yazl from 'yazl';
 import { renderCover, renderPages } from '../shared/render.mjs';
+import { buildPortfolio } from '../shared/pdf.mjs';
+import { drawQr } from '../shared/qr.mjs';
 const windowsFont = 'C:/Windows/Fonts/msyh.ttc';
 if (existsSync(windowsFont)) GlobalFonts.registerFromPath(windowsFont, 'Microsoft YaHei');
-const { project, format, destination } = workerData;
+const { project, format, destination, url } = workerData;
 const runtime = { createCanvas, loadImage };
+const qr = url ? drawQr(runtime, url, 320) : undefined;
 const temp = destination + '.tmp';
 try {
   if (format === 'cover') {
-    const canvas = await renderCover(project, runtime, 1600);
+    const canvas = await renderCover(project, runtime, { width: 1600, qr });
     await writeFile(temp, await canvas.encode('png'));
+  } else if (format === 'pdf') {
+    await writeFile(
+      temp,
+      await buildPortfolio(project, runtime, {
+        width: 1500,
+        theme: project.template,
+        skeleton: project.skeleton,
+        qr,
+      }),
+    );
   } else {
     const zip = new yazl.ZipFile();
     const output = createWriteStream(temp);
     const done = pipeline(zip.outputStream, output);
     let page = 0;
-    for await (const canvas of renderPages(project, runtime, 1600)) {
-      zip.addBuffer(await canvas.encode('png'), String(++page).padStart(2, '0') + '-project.png', {
-        compress: false,
-      });
+    for await (const sheet of renderPages(project, runtime, {
+      width: 1600,
+      theme: project.template,
+      qr,
+    })) {
+      zip.addBuffer(
+        await sheet.canvas.encode('png'),
+        String(++page).padStart(2, '0') + '-project.png',
+        { compress: false },
+      );
     }
     zip.addBuffer(
       Buffer.from(
@@ -31,7 +50,8 @@ try {
           '\n在线体验：' +
           (project.demoUrl || '未填写') +
           '\n源码：' +
-          (project.repositoryUrl || '未填写'),
+          (project.repositoryUrl || '未填写') +
+          (url ? '\n项目展示页：' + url : ''),
         'utf8',
       ),
       'README.txt',

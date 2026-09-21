@@ -37,6 +37,48 @@ export const templates: {
     description: '鲜明的色彩和大胆的标题，先声夺人。',
     color: '#d4ef75',
   },
+  {
+    id: 'paper',
+    name: '纸本读物',
+    english: 'Paper',
+    description: '米白纸面配石板蓝，像一本可以翻的作品集。',
+    color: '#2f4858',
+  },
+  {
+    id: 'ink',
+    name: '水墨映刻',
+    english: 'Ink',
+    description: '极简墨色，适合文字与影像并重的作品。',
+    color: '#1c1c1a',
+  },
+  {
+    id: 'neon',
+    name: '霓虹夜场',
+    english: 'Neon',
+    description: '暗底亮色，交互、影像、游戏类作品最上相。',
+    color: '#ff3d81',
+  },
+  {
+    id: 'kraft',
+    name: '牛皮档案',
+    english: 'Kraft',
+    description: '档案袋标签的味道，适合调研与实物类作品。',
+    color: '#a8622d',
+  },
+  {
+    id: 'mono',
+    name: '黑白极简',
+    english: 'Mono',
+    description: '只有黑白灰，把注意力全部留给图片。',
+    color: '#4b4b4b',
+  },
+  {
+    id: 'cobalt',
+    name: '钴蓝秩序',
+    english: 'Cobalt',
+    description: '冷调钴蓝，信息与结构感强，适合系统类作品。',
+    color: '#2563eb',
+  },
 ];
 export const samples: Project[] = [
   {

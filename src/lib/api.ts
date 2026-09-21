@@ -1,5 +1,54 @@
-import type { Project, Attachment, TemplateId } from '../domain/project';
-export type User = { id: string; email: string; name: string };
+import type { Project, Attachment, TemplateId, Birth } from '../domain/project';
+export type User = { id: string; email: string; name: string; isAdmin?: boolean };
+export type AdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  created_at: number;
+  project_count: number;
+  file_count: number;
+  live_count: number;
+  private_count: number;
+  bytes: number;
+};
+export type AdminProject = {
+  id: string;
+  title: string;
+  category: string;
+  year: string;
+  revision: number;
+  updatedAt: number;
+  ownerId: string;
+  ownerEmail: string;
+  ownerName: string;
+  fileCount: number;
+  bytes: number;
+  slug: string | null;
+  visibility: 'public' | 'private' | null;
+};
+export type AdminAsset = {
+  id: string;
+  name: string;
+  mime: string;
+  kind: string;
+  bytes: number;
+  createdAt: number;
+  used: boolean;
+};
+export type AdminOverview = {
+  users: AdminUser[];
+  totals: {
+    users: number;
+    projects: number;
+    live: number;
+    live_private: number;
+    files: number;
+    bytes: number;
+    adminEmails: string[];
+  };
+  disk: { free: number; total: number } | null;
+  maxUserBytes: number;
+};
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -20,6 +69,7 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
   if (payload.error) throw new ApiError(502, payload.error);
   return payload;
 }
+export type ExportFormat = 'cover' | 'bundle' | 'pdf';
 export const api = {
   me: () => request<{ user: User | null }>('/auth/me'),
   login: (email: string, password: string) =>
@@ -40,6 +90,8 @@ export const api = {
     }),
   projects: () => request<{ projects: Project[] }>('/projects'),
   project: (id: string) => request<{ project: Project }>('/projects/' + encodeURIComponent(id)),
+  birth: (id: string) =>
+    request<{ birth: Birth }>('/projects/' + encodeURIComponent(id) + '/birth'),
   create: (template: TemplateId) =>
     request<{ project: Project }>('/projects', {
       method: 'POST',
@@ -51,11 +103,19 @@ export const api = {
       body: JSON.stringify(project),
     }),
   remove: (id: string) => request('/projects/' + id, { method: 'DELETE' }),
-  publish: (id: string, revision: number) =>
-    request<{ slug: string; project: Project }>('/projects/' + id + '/publish', {
-      method: 'POST',
-      body: JSON.stringify({ revision }),
-    }),
+  publish: (id: string, revision: number, visibility: 'public' | 'private' = 'public') =>
+    request<{ slug: string; visibility: 'public' | 'private'; project: Project }>(
+      '/projects/' + id + '/publish',
+      {
+        method: 'POST',
+        body: JSON.stringify({ revision, visibility }),
+      },
+    ),
+  setVisibility: (id: string, visibility: 'public' | 'private') =>
+    request<{ visibility: 'public' | 'private'; project: Project }>(
+      '/projects/' + id + '/publication',
+      { method: 'PUT', body: JSON.stringify({ visibility }) },
+    ),
   unpublish: (id: string) =>
     request<{ project: Project }>('/projects/' + id + '/publication', { method: 'DELETE' }),
   publications: (offset = 0) =>
@@ -65,7 +125,7 @@ export const api = {
   bookmarks: () => request<{ ids: string[] }>('/bookmarks'),
   bookmark: (id: string, saved: boolean) =>
     request('/bookmarks/' + id, { method: 'PUT', body: JSON.stringify({ saved }) }),
-  export: (id: string, revision: number, format: 'cover' | 'bundle') =>
+  export: (id: string, revision: number, format: ExportFormat) =>
     request<{ id: string }>('/projects/' + id + '/exports', {
       method: 'POST',
       body: JSON.stringify({ revision, format }),
@@ -74,6 +134,29 @@ export const api = {
     request<{
       job: { id: string; status: string; error: string | null; downloadUrl: string | null };
     }>('/jobs/' + id),
+  adminOverview: () => request<AdminOverview>('/admin/overview'),
+  adminProjects: () => request<{ projects: AdminProject[] }>('/admin/projects'),
+  adminAssets: (projectId: string) =>
+    request<{ project: { id: string; title: string }; assets: AdminAsset[] }>(
+      '/admin/projects/' + encodeURIComponent(projectId) + '/assets',
+    ),
+  adminDeleteAsset: (id: string) =>
+    request<{ ok: true; name: string }>('/admin/assets/' + encodeURIComponent(id), {
+      method: 'DELETE',
+    }),
+  adminDeleteProject: (id: string) =>
+    request<{ ok: true; removedFiles: number }>('/admin/projects/' + encodeURIComponent(id), {
+      method: 'DELETE',
+    }),
+  adminDeleteUser: (id: string) =>
+    request<{ ok: true; removedFiles: number }>('/admin/users/' + encodeURIComponent(id), {
+      method: 'DELETE',
+    }),
+  adminOrphans: () =>
+    request<{ files: { name: string; bytes: number; ageHours: number }[]; total: number }>(
+      '/admin/orphans',
+    ),
+  adminPurgeOrphans: () => request<{ removed: number }>('/admin/orphans', { method: 'DELETE' }),
 };
 export type UploadedAsset = Omit<Attachment, 'kind'> & { kind: Attachment['kind'] | 'image' };
 export function uploadAsset(
@@ -85,7 +168,7 @@ export function uploadAsset(
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/projects/' + id + '/assets');
     xhr.setRequestHeader('X-Zhanxu-Request', '1');
-    xhr.timeout = 180000;
+    xhr.timeout = 600000;
     const data = new FormData();
     data.append('file', file);
     xhr.upload.onprogress = (e) => {

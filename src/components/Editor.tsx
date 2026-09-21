@@ -20,31 +20,69 @@ import {
   ImageSquare,
   Trash,
   ArrowRight,
+  CloudSlash,
 } from '@phosphor-icons/react';
-import { categories, templates } from '../data';
-import type { Project, ProjectSection, Attachment } from '../domain/project';
-import { api, uploadAsset, message } from '../lib/api';
+import { categories, templates, skeletonOptions, posterSizeOptions } from '../data';
+import type { Project, ProjectSection, Attachment, Birth } from '../domain/project';
+import { pickSkeleton } from '../../shared/render.mjs';
+import { uploadHint } from '../domain/limits';
+import { api, message } from '../lib/api';
+import { putAsset } from '../services/asset-service';
+import { exportLocally } from '../lib/local-export';
+import type { ExportFormat } from '../lib/api';
 import { projectService } from '../services/project-service';
 import { importFiles } from '../lib/import';
 import PosterImage from './PosterImage';
 import Showcase from './Showcase';
-type Tab = 'content' | 'media' | 'sections' | 'publish';
+import DesignPanel from './DesignPanel';
+import BirthCertificate from './BirthCertificate';
+type Tab = 'content' | 'media' | 'design' | 'sections' | 'publish';
 function recovered(initial: Project) {
   try {
     const saved = JSON.parse(sessionStorage.getItem('zhanxu:recovery:' + initial.id) || 'null');
-    if (saved?.revision === initial.revision) return saved as Project;
+    // 游客草稿没有 revision，两边都是 undefined，这里必须显式判断存在性
+    if (saved && saved.revision === initial.revision) return saved as Project;
   } catch {}
   return initial;
 }
+
+const exportLabels: Record<
+  ExportFormat,
+  { name: string; ing: string; done: string; help: string }
+> = {
+  pdf: {
+    name: '作品集 PDF',
+    ing: '作品集 PDF',
+    done: '作品集已生成，正在下载。',
+    help: '封面加自动目录、页眉页码和左侧装订边的 A4 打印稿，交给老师或打印店都能直接出。',
+  },
+  bundle: {
+    name: '图文包',
+    ing: '多页图文包',
+    done: '多页图文包已生成，正在下载。',
+    help: '按内容自动分页的 PNG 打包成 ZIP，适合直接拖进 PPT 或网盘。',
+  },
+  cover: {
+    name: '封面',
+    ing: '封面',
+    done: '封面已生成，正在下载。',
+    help: '只导出封面海报这一张 PNG，公开作品右下角带扫得开的二维码。',
+  },
+};
+
 export default function Editor({
   initial,
+  guest = false,
   onBack,
   onSaved,
+  onSignIn,
   onToast,
 }: {
   initial: Project;
+  guest?: boolean;
   onBack: () => void;
   onSaved: (p: Project) => void;
+  onSignIn?: () => void;
   onToast: (m: string) => void;
 }) {
   const [project, setProject] = useState(() => recovered(initial));
@@ -58,8 +96,18 @@ export default function Editor({
     recovered(initial) !== initial ? '已恢复此页面未保存的修改。' : '',
   );
   const [publishConfirm, setPublishConfirm] = useState(false);
-  const [exportFormat, setExportFormat] = useState<'cover' | 'bundle'>('bundle');
+  const [visibility, setVisibility] = useState<'public' | 'private'>(
+    initial.publishedVisibility || 'public',
+  );
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('pdf');
   const [dragging, setDragging] = useState(false);
+  const [birth, setBirth] = useState<Birth | undefined>(initial.birth);
+  const skeletonNote = (() => {
+    const id = project.skeleton ?? 'auto';
+    if (id !== 'auto') return skeletonOptions.find((s) => s.id === id)?.note ?? '';
+    const picked = pickSkeleton(project, project.posterSize ?? 'a4');
+    return '自动选用：' + (skeletonOptions.find((s) => s.id === picked)?.label ?? '标题在上');
+  })();
   const input = useRef<HTMLInputElement>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const alive = useRef(true);
@@ -89,6 +137,20 @@ export default function Editor({
     setDirty(true);
     setError('');
   }
+  // 出生证明是实时数据：每次打开发布页、每次保存后重新取一次（游客草稿没有服务端记录）
+  useEffect(() => {
+    if (tab !== 'publish' || guest) return;
+    let live = true;
+    api
+      .birth(project.id)
+      .then((result) => {
+        if (live) setBirth(result.birth);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [tab, project.id, project.revision]);
   function leave() {
     if (busy) return;
     if (dirty && !window.confirm('还有未保存的修改。确定返回吗？修改会临时保留在此页面。')) return;
@@ -115,7 +177,7 @@ export default function Editor({
     setError('');
     try {
       await saveCurrent();
-      onToast('项目已保存到账号。');
+      onToast(guest ? '草稿已保存在这台浏览器。' : '项目已保存到账号。');
     } catch (e) {
       setError(message(e));
     } finally {
@@ -123,19 +185,50 @@ export default function Editor({
     }
   }
   async function publish() {
+    if (guest) {
+      onSignIn?.();
+      return;
+    }
     setBusy('publish');
     setError('');
     try {
       const saved = dirty ? await saveCurrent() : project;
-      const result = await api.publish(saved.id, saved.revision!);
+      const result = await api.publish(saved.id, saved.revision!, visibility);
       setProject(result.project);
       setDirty(false);
       setPublishConfirm(false);
       setTab('publish');
       onSaved(result.project);
-      onToast('项目已发布，可通过展示链接访问。');
+      onToast(
+        result.visibility === 'private'
+          ? '项目已发布为私密：只有登录你的账号才能打开链接。'
+          : '项目已公开，可通过展示链接访问。',
+      );
     } catch (e) {
       setPublishConfirm(false);
+      setError(message(e));
+    } finally {
+      setBusy('');
+    }
+  }
+  // 已经发布过时，切换公开范围立即生效，不需要重新发布
+  async function changeVisibility(next: 'public' | 'private') {
+    const previous = visibility;
+    setVisibility(next);
+    if (!project.publishedSlug || project.publishedVisibility === next) return;
+    setBusy('visibility');
+    setError('');
+    try {
+      const result = await api.setVisibility(project.id, next);
+      setProject((p) => ({ ...p, publishedVisibility: next }));
+      onSaved(result.project);
+      onToast(
+        next === 'private'
+          ? '已改为私密：链接不再出现在发现页，只有你登录后能打开。'
+          : '已改为公开：任何人可以访问，并会出现在发现页。',
+      );
+    } catch (e) {
+      setVisibility(previous);
       setError(message(e));
     } finally {
       setBusy('');
@@ -151,6 +244,7 @@ export default function Editor({
         publishedSlug: result.project.publishedSlug,
         publishedRevision: result.project.publishedRevision,
       }));
+      setVisibility('public');
       onSaved(result.project);
       onToast('项目已撤回，草稿仍然保留。');
     } catch (e) {
@@ -164,6 +258,11 @@ export default function Editor({
     setError('');
     try {
       const saved = dirty ? await saveCurrent() : project;
+      if (guest) {
+        await exportLocally(saved, exportFormat, setProgress);
+        onToast(exportLabels[exportFormat].done);
+        return;
+      }
       const result = await api.export(saved.id, saved.revision!, exportFormat);
       let complete = false;
       for (let attempt = 0; attempt < 150 && alive.current; attempt++) {
@@ -171,7 +270,7 @@ export default function Editor({
         setProgress(
           job.status === 'queued'
             ? '导出任务正在排队'
-            : '正在生成' + (exportFormat === 'bundle' ? '多页图文包' : '封面'),
+            : '正在生成' + exportLabels[exportFormat].ing,
         );
         if (job.status === 'failed') throw new Error(job.error || '导出失败。');
         if (job.status === 'succeeded' && job.downloadUrl) {
@@ -180,9 +279,7 @@ export default function Editor({
           a.download = '';
           a.click();
           complete = true;
-          onToast(
-            exportFormat === 'bundle' ? '多页图文包已生成，正在下载。' : '封面已生成，正在下载。',
-          );
+          onToast(exportLabels[exportFormat].done);
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -199,8 +296,8 @@ export default function Editor({
   }
   async function upload(files: File[]) {
     if (uploadLock.current || !files.length) return;
-    if (files.length > 8) {
-      setError('一次最多选择8个文件。');
+    if (files.length > 24) {
+      setError('一次最多选择24个文件。');
       return;
     }
     uploadLock.current = true;
@@ -214,7 +311,7 @@ export default function Editor({
         const isImage = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
         if (isImage && count >= 24) throw new Error('最多24张展示图片，已导入的文件仍然保留。');
         if (!isImage && attachmentCount >= 12) throw new Error('最多12个视频或文件附件。');
-        const uploaded = await uploadAsset(project.id, file, (p) =>
+        const uploaded = await putAsset(project.id, file, (p) =>
           setProgress('上传 ' + file.name + ' ' + p + '%'),
         );
         if (uploaded.kind === 'image') {
@@ -240,7 +337,7 @@ export default function Editor({
                 );
                 const blob = new Blob([bytes], { type: 'image/jpeg' });
                 const pageFile = new File([blob], preview.name + '.jpg', { type: 'image/jpeg' });
-                const image = await uploadAsset(project.id, pageFile, (n) =>
+                const image = await putAsset(project.id, pageFile, (n) =>
                   setProgress('保存PDF预览 ' + n + '%'),
                 );
                 count++;
@@ -296,6 +393,24 @@ export default function Editor({
     update({ sections });
   }
   const link = project.publishedSlug ? window.location.origin + '/p/' + project.publishedSlug : '';
+  const [qr, setQr] = useState('');
+  useEffect(() => {
+    const slug = project.publishedSlug;
+    if (!slug || project.publishedVisibility === 'private') {
+      setQr('');
+      return;
+    }
+    let active = true;
+    import('../lib/poster')
+      .then(({ qrDataUrl }) => qrDataUrl(window.location.origin + '/p/' + slug, 264))
+      .then((data) => {
+        if (active) setQr(data);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [project.publishedSlug, project.publishedVisibility]);
   async function copy() {
     try {
       await navigator.clipboard.writeText(link);
@@ -323,7 +438,9 @@ export default function Editor({
                 ? '有未保存的修改'
                 : project.publishedSlug
                   ? '已发布 / 草稿已保存'
-                  : '草稿已保存到账号'}
+                  : guest
+                    ? '草稿保存在这台浏览器'
+                    : '草稿已保存到账号'}
             </span>
           </div>
         </div>
@@ -334,11 +451,11 @@ export default function Editor({
           </button>
           <button
             className="button primary"
-            onClick={() => setPublishConfirm(true)}
+            onClick={() => (guest ? onSignIn?.() : setPublishConfirm(true))}
             disabled={!!busy}
           >
             <Globe size={17} />
-            {project.publishedSlug ? '更新发布' : '发布项目'}
+            {guest ? '登录后发布' : project.publishedSlug ? '更新发布' : '发布项目'}
           </button>
         </div>
       </div>
@@ -349,6 +466,7 @@ export default function Editor({
               [
                 ['content', '项目介绍'],
                 ['media', '作品素材'],
+                ['design', '方案与配色'],
                 ['sections', '内容模块'],
                 ['publish', '发布导出'],
               ] as [Tab, string][]
@@ -508,7 +626,7 @@ export default function Editor({
                   <UploadSimple size={30} />
                   <strong>拖入文件，或点击上传</strong>
                   <span>图片、PDF、视频、ZIP项目包</span>
-                  <small>图片12MB / PDF25MB / 视频100MB / ZIP50MB</small>
+                  <small>{uploadHint}</small>
                 </button>
                 <p className="field-help">
                   PDF保留完整文件，并尝试生成前6页预览。ZIP仅存储与下载，不运行其中的程序。
@@ -623,6 +741,7 @@ export default function Editor({
                 )}
               </div>
             )}
+            {tab === 'design' && <DesignPanel project={project} update={update} busy={!!busy} />}
             {tab === 'sections' && (
               <div className="control-section">
                 <h2>按你的项目组织内容</h2>
@@ -721,51 +840,117 @@ export default function Editor({
               <div className="control-section">
                 <h2>一个链接，展示完整项目</h2>
                 <p className="field-help">
-                  公开页包含介绍、图片、内容模块、已公开附件与体验链接。图片只是展示的入口。
+                  展示页包含介绍、图片、内容模块、已公开附件与体验链接。图片只是展示的入口。
                 </p>
-                {link ? (
-                  <>
-                    <label className="field">
-                      公开展示链接
-                      <input readOnly value={link} onFocus={(e) => e.target.select()} />
-                    </label>
-                    <div className="publish-link-actions">
-                      <button className="button secondary" onClick={copy}>
-                        <LinkIcon size={16} />
-                        复制链接
-                      </button>
-                      <a
-                        className="button secondary"
-                        href={link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        查看公开页
-                        <ArrowRight size={16} />
-                      </a>
+                {guest && (
+                  <div className="guest-publish">
+                    <CloudSlash size={24} />
+                    <div>
+                      <strong>游客模式：草稿存在这台浏览器里</strong>
+                      <small>
+                        编辑、导出海报和作品集 PDF
+                        都不用登录；发布到网上、让同学扫码看到，需要一个账号。
+                      </small>
                     </div>
-                    <p className="field-help">
-                      {dirty || project.revision !== project.publishedRevision
-                        ? '草稿有新修改，需要更新发布后访客才能看到。'
-                        : '访客看到的是当前已保存版本。'}
-                    </p>
-                    <button className="text-link danger" onClick={unpublish}>
-                      撤回公开展示
+                    <button className="button primary" onClick={onSignIn}>
+                      登录后发布
+                      <ArrowRight size={16} />
                     </button>
-                  </>
-                ) : (
-                  <div className="publish-empty">
-                    <Globe size={30} />
-                    <p>还没有发布。准备好后，给作品一个自己的页面。</p>
                   </div>
                 )}
-                <button
-                  className="button primary full-width"
-                  onClick={() => setPublishConfirm(true)}
-                >
-                  <Globe size={17} />
-                  {link ? '更新发布' : '发布项目'}
-                </button>
+                {!guest && (
+                  <>
+                    <fieldset className="visibility-choice">
+                      <legend>谁能看到</legend>
+                      <label className={visibility === 'public' ? 'is-active' : ''}>
+                        <input
+                          type="radio"
+                          name="publish-visibility"
+                          value="public"
+                          checked={visibility === 'public'}
+                          disabled={!!busy}
+                          onChange={() => void changeVisibility('public')}
+                        />
+                        <span>公开</span>
+                        <small>会出现在「发现作品」里，任何人凭链接都能访问。</small>
+                      </label>
+                      <label className={visibility === 'private' ? 'is-active' : ''}>
+                        <input
+                          type="radio"
+                          name="publish-visibility"
+                          value="private"
+                          checked={visibility === 'private'}
+                          disabled={!!busy}
+                          onChange={() => void changeVisibility('private')}
+                        />
+                        <span>私密</span>
+                        <small>不进发现页，只有登录你自己的账号才能打开这个链接。</small>
+                      </label>
+                    </fieldset>
+                    {link ? (
+                      <>
+                        <label className="field">
+                          {visibility === 'private' ? '私密展示链接（仅自己可见）' : '公开展示链接'}
+                          <input readOnly value={link} onFocus={(e) => e.target.select()} />
+                        </label>
+                        <div className="publish-link-actions">
+                          <button className="button secondary" onClick={copy}>
+                            <LinkIcon size={16} />
+                            复制链接
+                          </button>
+                          <a
+                            className="button secondary"
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            查看公开页
+                            <ArrowRight size={16} />
+                          </a>
+                        </div>
+                        <p className="field-help">
+                          {project.publishedVisibility === 'private'
+                            ? '当前为私密：只有登录你的账号才能打开这个链接。'
+                            : '当前为公开：任何人可以访问，并会出现在发现页。'}
+                          {dirty || project.revision !== project.publishedRevision
+                            ? ' 草稿有新修改，需要更新发布后访客才能看到。'
+                            : ''}
+                        </p>
+                        {qr && (
+                          <div className="publish-qr">
+                            <img
+                              src={qr}
+                              alt="展台二维码，扫码打开这个作品页"
+                              width={132}
+                              height={132}
+                            />
+                            <div>
+                              <strong>展台二维码</strong>
+                              <small>
+                                展位上把这张图打出来或直接放屏幕，老师同学扫一下就打开这个页面。封面海报的右下角也会印这个码。
+                              </small>
+                            </div>
+                          </div>
+                        )}
+                        <button className="text-link danger" onClick={unpublish}>
+                          撤回公开展示
+                        </button>
+                      </>
+                    ) : (
+                      <div className="publish-empty">
+                        <Globe size={30} />
+                        <p>还没有发布。准备好后，给作品一个自己的页面。</p>
+                      </div>
+                    )}
+                    <button
+                      className="button primary full-width"
+                      onClick={() => setPublishConfirm(true)}
+                    >
+                      <Globe size={17} />
+                      {link ? '更新发布' : '发布项目'}
+                    </button>
+                  </>
+                )}
                 <div className="export-settings">
                   <h3>把介绍带到其他地方</h3>
                   <label className="field">
@@ -773,20 +958,24 @@ export default function Editor({
                     <select
                       aria-label="导出形式"
                       value={exportFormat}
-                      onChange={(e) => setExportFormat(e.target.value as 'cover' | 'bundle')}
+                      onChange={(e) => setExportFormat(e.target.value as ExportFormat)}
                     >
+                      <option value="pdf">作品集 PDF（可直接打印）</option>
                       <option value="bundle">多页图文展示包（ZIP）</option>
                       <option value="cover">项目封面（PNG）</option>
                     </select>
                   </label>
-                  <p className="field-help">
-                    图文包按内容自动分页，包含介绍与图片。视频、完整PDF和源码通过项目页访问，不会被压成一张图。
-                  </p>
+                  <p className="field-help">{exportLabels[exportFormat].help}</p>
                   <button className="button secondary full-width" onClick={exportProject}>
                     <DownloadSimple size={17} />
-                    导出{exportFormat === 'bundle' ? '图文包' : '封面'}
+                    导出{exportLabels[exportFormat].name}
                   </button>
                 </div>
+                {birth && (
+                  <div className="birth-slot">
+                    <BirthCertificate birth={birth} compact />
+                  </div>
+                )}
               </div>
             )}
           </fieldset>
@@ -832,29 +1021,77 @@ export default function Editor({
             )}
           </div>
           <div className="template-bar">
-            <div>
-              <strong>封面风格</strong>
-              <span>完整项目内容始终保留。</span>
+            <div className="template-bar-row">
+              <div>
+                <strong>封面风格</strong>
+                <span>完整项目内容始终保留。</span>
+              </div>
+              <div className="template-options">
+                {templates.map((t) => (
+                  <button
+                    key={t.id}
+                    className={'template-option ' + (project.template === t.id ? 'selected' : '')}
+                    aria-label={'选择' + t.name + '模板'}
+                    aria-pressed={project.template === t.id}
+                    disabled={!!busy}
+                    onClick={() => {
+                      update({ template: t.id });
+                      setView('cover');
+                    }}
+                  >
+                    <span className="template-swatch" style={{ background: t.color }}>
+                      {project.template === t.id ? <Check size={15} /> : <Plus size={15} />}
+                    </span>
+                    {t.name}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="template-options">
-              {templates.map((t) => (
-                <button
-                  key={t.id}
-                  className={'template-option ' + (project.template === t.id ? 'selected' : '')}
-                  aria-label={'选择' + t.name + '模板'}
-                  aria-pressed={project.template === t.id}
-                  disabled={!!busy}
-                  onClick={() => {
-                    update({ template: t.id });
-                    setView('cover');
-                  }}
-                >
-                  <span className="template-swatch" style={{ background: t.color }}>
-                    {project.template === t.id ? <Check size={15} /> : <Plus size={15} />}
-                  </span>
-                  {t.name}
-                </button>
-              ))}
+            <div className="template-bar-row">
+              <div>
+                <strong>排版骨架</strong>
+                <span>{skeletonNote}</span>
+              </div>
+              <div className="chip-row">
+                {skeletonOptions.map((s) => (
+                  <button
+                    key={s.id}
+                    className={'chip ' + ((project.skeleton ?? 'auto') === s.id ? 'selected' : '')}
+                    aria-pressed={(project.skeleton ?? 'auto') === s.id}
+                    title={s.note}
+                    disabled={!!busy}
+                    onClick={() => {
+                      update({ skeleton: s.id });
+                      setView('cover');
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="template-bar-row">
+              <div>
+                <strong>海报尺寸</strong>
+                <span>导出与分享卡片都用这个比例。</span>
+              </div>
+              <div className="chip-row">
+                {posterSizeOptions.map((s) => (
+                  <button
+                    key={s.id}
+                    className={'chip ' + ((project.posterSize ?? 'a4') === s.id ? 'selected' : '')}
+                    aria-pressed={(project.posterSize ?? 'a4') === s.id}
+                    title={s.note}
+                    disabled={!!busy}
+                    onClick={() => {
+                      update({ posterSize: s.id });
+                      setView('cover');
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -906,6 +1143,9 @@ export default function Editor({
               访客将看到项目信息、{project.images.length}张图片，以及
               {(project.attachments || []).filter((a) => a.visible).length}
               个已勾选公开的附件。未公开的PDF与项目包仍保持私有。
+              {visibility === 'private'
+                ? '本次发布为私密：不会出现在发现页，只有登录你的账号才能打开。'
+                : '本次发布为公开：任何人凭链接都能访问。'}
             </Dialog.Description>
             <Dialog.Close
               className="dialog-close icon-button"
@@ -918,7 +1158,11 @@ export default function Editor({
               请确认你有权公开这些内容。发布后仍可继续修改草稿，或随时撤回。
             </p>
             <button className="button primary full-width" disabled={!!busy} onClick={publish}>
-              {busy === 'publish' ? '发布中' : '确认发布'}
+              {busy === 'publish'
+                ? '发布中'
+                : visibility === 'private'
+                  ? '确认私密发布'
+                  : '确认公开发布'}
               <ArrowUpRightIcon />
             </button>
           </Dialog.Content>

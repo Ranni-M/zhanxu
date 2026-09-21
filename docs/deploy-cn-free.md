@@ -103,6 +103,7 @@ bash /opt/zhanxu/deploy/bootstrap.sh
 | `COOKIE_SECURE`      | **false**             | true           | HTTP 下必须 false，否则浏览器不存会话 Cookie → 登录失败 |
 | `TRUST_PROXY`        | 不设置                | `1`            | 只在确实有一层可信反代时开                              |
 | `ALLOW_REGISTRATION` | true → 注册后改 false | 同             | 脚本默认 true 以便你注册首个账号                        |
+| `ADMIN_EMAILS`       | 空                    | 同             | 逗号分隔的管理员邮箱，可用网页端 /admin 管理页          |
 
 ---
 
