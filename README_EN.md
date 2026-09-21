@@ -20,6 +20,10 @@ This is a runnable full-stack application, suitable for personal graduation proj
 | ----------------------------------------------------------- | ----------------------------------------------------------- |
 | ![Public project page](docs/screenshots/public-project.png) | ![Dark-mode workspace](docs/screenshots/workspace-dark.png) |
 
+| Home feature showcase                                        | Public page on a phone                                                |
+| ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| ![Home feature showcase](docs/screenshots/home-features.png) | ![Public page on a phone](docs/screenshots/public-project-mobile.png) |
+
 ## Features
 
 - Email/password registration, sign-in, sign-out and password change with server-side sessions (scrypt hashing, hashed session tokens, CSRF origin checks, rate limiting).
@@ -29,8 +33,13 @@ This is a runnable full-stack application, suitable for personal graduation proj
 - Upload images, full PDFs, MP4/WebM videos, and ZIP project archives.
 - PDFs are parsed in the browser to preview the first 6 pages and attempt abstract extraction; the full file is always kept.
 - Standalone public project pages: private drafts are separated from published snapshots; each attachment can be published individually; pages can be updated or withdrawn.
-- Discovery of published works with category search and per-account bookmarks.
+- Zero-fill import: drop a ZIP of the whole project folder and titles, intros, author, year, category and image order are read out into an editable draft.
+- Guest mode: create a draft, preview and export a portfolio without an account; publishing asks you to sign in, then the draft moves into your account.
+- Multiple colour ways per project, plus a draggable before/after comparison on the public page.
+- Discovery of published works with category search, bookmarks and sorting.
 - Three cover layouts; server-side export of a 1600px-wide PNG cover or an auto-paginated PNG picture pack (ZIP).
+- Multi-page A4 portfolio PDF (auto table of contents, page numbers, binding margin) and a booth QR code for print or screen.
+- The home page demonstrates import, layout, comparison, export and asset handling with real components.
 - Theme switching, mobile layout, keyboard navigation, and reduced-motion support.
 
 **Uploading a ZIP does not run the project.** Software projects should provide a deployed demo URL and a repository link; animation, game, and installation works can upload a demo video instead. The project page presents the full outcome — the cover is only the entry point.

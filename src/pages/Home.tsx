@@ -14,6 +14,8 @@ import {
 } from '@phosphor-icons/react';
 import type { Project, TemplateId } from '../domain/project';
 import { categories, samples, templates } from '../data';
+import { useReveal } from '../lib/reveal';
+import FeatureShowcase from '../components/FeatureShowcase';
 import PosterImage from '../components/PosterImage';
 export default function Home({
   projects,
@@ -47,7 +49,14 @@ export default function Home({
     [bookmarkedOnly, setBookmarkedOnly] = useState(false),
     [dragging, setDragging] = useState(false),
     [sort, setSort] = useState('curated');
+  const featureSection = useReveal<HTMLElement>(),
+    discoverSection = useReveal<HTMLElement>();
   const source = projects.length ? projects : samples;
+  const countIn = (category: string) =>
+    category === '全部作品'
+      ? source.length
+      : source.filter((project) => project.category === category).length;
+  const filtering = Boolean(query) || bookmarkedOnly || category !== '全部作品';
   const filtered = source.filter(
     (p) =>
       (category === '全部作品' || p.category === category) &&
@@ -57,7 +66,13 @@ export default function Home({
   const visible =
     sort === 'title'
       ? [...filtered].sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
-      : filtered;
+      : sort === 'latest'
+        ? [...filtered].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        : sort === 'saved'
+          ? [...filtered].sort(
+              (a, b) => Number(bookmarks.includes(b.id)) - Number(bookmarks.includes(a.id)),
+            )
+          : filtered;
   const toggleBookmark = onBookmark;
   return (
     <main>
@@ -124,7 +139,7 @@ export default function Home({
           <p className="import-hint">
             {importText ||
               (dragging
-                ? '松手，标题、简介、图片和配色都会自动填好。'
+                ? '松手，标题、简介、图片和版式都会自动填好。'
                 : '把毕设文件夹压成 zip 拖进来，零填写生成作品页。')}
           </p>
         </div>
@@ -162,7 +177,7 @@ export default function Home({
           <UploadSimple size={24} weight="light" />
           <div>
             <strong>上传作品</strong>
-            <span>图片、视频与项目文件</span>
+            <span>图片、视频、论文与源码包</span>
           </div>
         </div>
         <ArrowRight className="workflow-arrow" size={18} />
@@ -170,7 +185,7 @@ export default function Home({
           <Layout size={24} weight="light" />
           <div>
             <strong>组织项目</strong>
-            <span>分模块讲清你的创作</span>
+            <span>分模块、可对比、多配色</span>
           </div>
         </div>
         <ArrowRight className="workflow-arrow" size={18} />
@@ -178,13 +193,30 @@ export default function Home({
           <DownloadSimple size={24} weight="light" />
           <div>
             <strong>发布与导出</strong>
-            <span>完整项目页与多页展示图</span>
+            <span>公开页、海报、PDF 与二维码</span>
           </div>
         </div>
       </section>
-      <section className="discover-section container" id="discover">
+      <section
+        className="feature-section container reveal"
+        id="features"
+        aria-labelledby="feature-title"
+        ref={featureSection}
+      >
         <div className="section-title">
-          <h2>每一份热爱，都有自己的形状。</h2>
+          <h2 id="feature-title">每一份热爱，都有自己的形状。</h2>
+          <p>上传、排版、导出、发布，一条流水线走完。</p>
+        </div>
+        <FeatureShowcase
+          projects={projects}
+          importing={importing}
+          importText={importText}
+          onImportZip={onImportZip}
+        />
+      </section>
+      <section className="discover-section container reveal" id="discover" ref={discoverSection}>
+        <div className="section-title">
+          <h2>看看同届怎么做。</h2>
           <p>探索不同的展示方式，找到属于你的那一种。</p>
         </div>
         <div className="discovery-tools">
@@ -197,6 +229,7 @@ export default function Home({
                 onClick={() => setCategory(c)}
               >
                 {c}
+                {countIn(c) > 0 && <span className="tab-count">{countIn(c)}</span>}
               </button>
             ))}
           </div>
@@ -206,7 +239,7 @@ export default function Home({
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="搜索作品"
+                placeholder="搜标题或方向"
                 aria-label="搜索作品"
                 enterKeyHint="search"
               />
@@ -232,13 +265,16 @@ export default function Home({
         </div>
         <div className="results-meta">
           <span>
-            {bookmarkedOnly ? '已收藏的作品' : projects.length ? '公开项目' : '展示灵感'}{' '}
+            {bookmarkedOnly ? '已收藏' : projects.length ? '公开项目' : '排版示例'}
             <span className="count">{visible.length}</span>
+            {filtering && <span className="meta-flag">已筛选</span>}
           </span>
           <label className="sort-label">
             <select aria-label="作品排序" value={sort} onChange={(e) => setSort(e.target.value)}>
               <option value="curated">推荐顺序</option>
+              <option value="latest">最新发布</option>
               <option value="title">名称排序</option>
+              <option value="saved">收藏优先</option>
             </select>
             <CaretDown size={12} />
           </label>
@@ -247,7 +283,7 @@ export default function Home({
           <div className="project-grid">
             {visible.map((project, index) => (
               <article
-                className="project-card"
+                className="project-card reveal-item"
                 key={project.id}
                 style={{ '--item-index': index } as React.CSSProperties}
               >

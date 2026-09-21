@@ -29,6 +29,23 @@ const pass = (s: string) => {
   checks.push(s);
   console.log('PASS ' + s);
 };
+/** 先整页滚一遍预热（触发滚动进场动画、图片解码与 canvas 渲染），再回顶截图。
+ *  否则 fullPage 截图会因 captureBeyondViewport 把未光栅化的区域拍成灰块。 */
+const warmScroll = async (page: Page) => {
+  await page.evaluate(async () => {
+    const step = Math.round(window.innerHeight * 0.7);
+    for (let y = 0; y < document.body.scrollHeight; y += step) {
+      window.scrollTo(0, y);
+      await new Promise((r) => setTimeout(r, 90));
+    }
+    window.scrollTo(0, 0);
+  });
+  // 强制解码所有位图，否则 fullPage 截图会把尚未光栅化的图片拍成空白块
+  await page.evaluate(() =>
+    Promise.all([...document.images].map((img) => img.decode().catch(() => {}))),
+  );
+  await page.waitForTimeout(900);
+};
 try {
   server = spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], {
     cwd: process.cwd(),
@@ -70,8 +87,27 @@ try {
   page.on('dialog', (dialog) => void dialog.accept());
   await page.goto(base);
   await page.locator('.hero-art .poster-image img').first().waitFor();
+  await warmScroll(page);
   await page.screenshot({ path: path.join(out, 'home-desktop.png'), fullPage: true });
   assert.equal(await page.locator('.project-card').count(), 4);
+  assert.equal(await page.locator('.feature-cell').count(), 6, '首页功能区应为 6 格');
+  assert.equal(
+    await page.locator('.feature-extract-row').count(),
+    5,
+    '导入解析面板应展示 5 个字段',
+  );
+  assert.equal(await page.locator('.category-tabs .tab-count').count(), 5, '分类标签应带作品数量');
+  await page.locator('.feature-compare .compare-range').waitFor();
+  await page.locator('.feature-qr-frame img').waitFor();
+  const featureDownload = page.waitForEvent('download', { timeout: 180000 });
+  await page.getByRole('button', { name: '下载示例作品集 PDF' }).click();
+  const featureFile = await featureDownload;
+  assert.match(featureFile.suggestedFilename(), /作品集\.pdf$/);
+  await featureFile.saveAs(path.join(out, 'home-sample.pdf'));
+  const featurePdf = await readFile(path.join(out, 'home-sample.pdf'));
+  assert.equal(featurePdf.subarray(0, 5).toString(), '%PDF-');
+  await page.locator('.feature-status').waitFor();
+  assert.match(await page.locator('.feature-status').innerText(), /已生成/);
   await page.getByRole('textbox', { name: '搜索作品' }).fill('不存在的项目');
   await page.getByRole('heading', { name: '没有找到相关作品' }).waitFor();
   await page.getByRole('button', { name: '查看全部作品', exact: true }).click();
@@ -284,6 +320,8 @@ try {
   assert.ok(
     await phone.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
   );
+  assert.equal(await phone.locator('.feature-cell').count(), 6, '手机端功能区同样 6 格');
+  await warmScroll(phone);
   await phone.screenshot({ path: path.join(out, 'home-mobile.png'), fullPage: true });
   pass('390px手机布局无横向溢出');
   await mobile.addCookies(await context.cookies());
