@@ -343,7 +343,7 @@ export default function Home({
           </button>
         </div>
         <div className="template-feature-gallery">
-          {templates.map((template, index) => (
+          {templates.map((template) => (
             <button
               key={template.id}
               className="mini-template"
@@ -355,13 +355,7 @@ export default function Home({
                 {template.name}
                 <ArrowUpRight size={14} />
               </span>
-              <small>
-                {index === 0
-                  ? '内容与视觉的平衡'
-                  : index === 1
-                    ? '给作品更多呼吸感'
-                    : '让第一眼更有力量'}
-              </small>
+              <small>{template.description.replace(/。$/, '')}</small>
             </button>
           ))}
         </div>

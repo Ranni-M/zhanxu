@@ -23,6 +23,3 @@ export const localProjectRepository: ProjectRepository = {
     await write((await readGuestProjects()).filter((item) => item.id !== id));
   },
 };
-export async function clearGuestProjects() {
-  await write([]);
-}

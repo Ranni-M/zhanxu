@@ -18,6 +18,8 @@ export function createProjectService(getRepository: () => ProjectRepository) {
       if (!project.title.trim()) throw new Error('请填写项目名称。');
       return getRepository().save(project);
     },
+    /** 建一份还没命名的空草稿：它不是“作品”，也不该在作品列表里冒充成品 */
+    saveDraft: (project: Project) => getRepository().save(project),
     remove: (id: string) => getRepository().remove(id),
   };
 }

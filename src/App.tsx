@@ -32,7 +32,10 @@ import { api, message, uploadAsset } from './lib/api';
 import { readArchive } from './lib/archive';
 import { putAsset, dataUrlFile } from './services/asset-service';
 import { projectService, setGuestMode } from './services/project-service';
-import { readGuestProjects, clearGuestProjects } from './infrastructure/local-project-repository';
+import {
+  readGuestProjects,
+  localProjectRepository,
+} from './infrastructure/local-project-repository';
 import type { User } from './lib/api';
 import Home from './pages/Home';
 import Templates from './pages/Templates';
@@ -178,7 +181,7 @@ function Application() {
       // 游客也能用：没有账号就建一个只存在这台浏览器里的草稿
       const created = user
         ? (await api.create('editorial')).project
-        : await projectService.save({ ...createProject(), title: '未命名作品' });
+        : await projectService.saveDraft({ ...createProject() });
       const id = created.id;
       const parsed = await readArchive(file, setImportText);
       const images: Project['images'] = [];
@@ -206,7 +209,7 @@ function Application() {
    */
   async function startGuest(template: TemplateId) {
     clearTimeout(timer.current);
-    const draft = await projectService.save({ ...createProject(), template, title: '未命名作品' });
+    const draft = await projectService.saveDraft({ ...createProject(), template });
     navigate('/studio/' + draft.id);
   }
   function start(template: TemplateId = 'editorial') {
@@ -219,7 +222,10 @@ function Application() {
   }
   /** 登录后把浏览器里的草稿搬进账号：图片重新上传，随后清掉本地副本 */
   async function migrateGuestDrafts() {
-    const drafts = await readGuestProjects();
+    // 从没保存过的空草稿（没标题、没图、没介绍）不搬：服务端也不收无名项目
+    const drafts = (await readGuestProjects()).filter(
+      (d) => d.title.trim() || d.images.length || d.intro.trim(),
+    );
     if (!drafts.length) return 0;
     let moved = 0;
     for (const draft of drafts) {
@@ -269,14 +275,12 @@ function Application() {
           attachments: [],
         });
         moved++;
+        await localProjectRepository.remove(draft.id);
       } catch (e) {
         notify('有一份本地草稿没能搬进账号：' + message(e));
       }
     }
-    if (moved) {
-      await clearGuestProjects();
-      notify('已把 ' + moved + ' 份浏览器草稿搬进账号。');
-    }
+    if (moved) notify('已把 ' + moved + ' 份浏览器草稿搬进账号。');
     return moved;
   }
   function openProject(project: Project) {

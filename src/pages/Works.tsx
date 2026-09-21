@@ -41,6 +41,8 @@ export default function Works({
   useEffect(() => {
     void load();
   }, []);
+  // “没标题、没图、没介绍”的草稿不进列表：点了创建却没动过的项目不该看起来像作品
+  const saved = projects.filter((p) => p.title.trim() || p.images.length || p.intro.trim());
   async function remove(project: Project) {
     if (
       !window.confirm(
@@ -98,7 +100,7 @@ export default function Works({
             <div className="skeleton work-skeleton" key={i} />
           ))}
         </div>
-      ) : projects.length ? (
+      ) : saved.length ? (
         <div className="project-grid saved-grid">
           <button className="new-project-card" onClick={start}>
             <span>
@@ -107,7 +109,7 @@ export default function Works({
             <strong>开始一个新项目</strong>
             <p>图片、视频、过程与成果，都在这里。</p>
           </button>
-          {projects.map((p) => (
+          {saved.map((p) => (
             <article className="project-card" key={p.id}>
               <button
                 className="project-thumbnail"

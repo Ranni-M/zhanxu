@@ -453,6 +453,12 @@ try {
   await guest.goto(base);
   await guest.getByRole('button', { name: '创建作品', exact: true }).first().click();
   await guest.waitForURL(/\/studio\//, { timeout: 60000 });
+  // 只点了「创建作品」、一个字没写：它不该在「我的作品」里冒充作品
+  await guest.getByRole('button', { name: '返回我的作品', exact: true }).click();
+  await guest.getByText('你的第一份代表作，从这里开始。', { exact: true }).waitFor();
+  assert.equal(await guest.locator('.project-card').count(), 0, '没填过内容的空草稿不该进作品列表');
+  await guest.getByRole('button', { name: '创建作品', exact: true }).first().click();
+  await guest.waitForURL(/\/studio\//, { timeout: 60000 });
   await guest.getByLabel('项目名称 *', { exact: true }).fill('游客草稿');
   await guest.getByLabel('创作者', { exact: true }).fill('路过的人');
   await guest.getByRole('button', { name: '保存修改', exact: true }).click();

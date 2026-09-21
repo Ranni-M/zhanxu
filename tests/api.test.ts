@@ -340,3 +340,18 @@ test('完整账号、项目隔离、私有素材、发布快照与分页导出',
     assert.equal((await call('/auth/me', 'GET', undefined, owner)).data.user, null);
   });
 });
+// 「点了创建作品、一个字没写」不该把每用户 100 个项目的额度占死
+test('项目额度满了先回收从没保存过的空草稿', async () => {
+  const cookie = await register('quota@example.test');
+  for (let i = 0; i < 100; i++) {
+    const created = await call('/projects', 'POST', { template: 'editorial' }, cookie);
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+  }
+  const list = await call('/projects', 'GET', undefined, cookie);
+  assert.equal(list.data.projects.length, 100);
+  const created = await call('/projects', 'POST', { template: 'editorial' }, cookie);
+  assert.equal(created.status, 201, '空草稿应该被回收，而不是直接拒绝新建');
+  const after = await call('/projects', 'GET', undefined, cookie);
+  assert.equal(after.data.projects.length, 1, '回收后只剩新建的这一份');
+  assert.equal(after.data.projects[0].id, created.data.project.id);
+});

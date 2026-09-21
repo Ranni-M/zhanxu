@@ -543,7 +543,9 @@ export function pickSkeleton(project, size = 'a4') {
 function resolve(options) {
   const opts = typeof options === 'number' ? { width: options } : options || {};
   const size = posterSizes[opts.size] ? opts.size : 'a4';
-  const theme = themes[opts.theme] ? opts.theme : 'editorial';
+  // 主题只能来自 opts.theme；外面忘了传就退回项目自己的 template，别再默默套 editorial
+  const wanted = themes[opts.theme] ? opts.theme : opts.project?.template;
+  const theme = themes[wanted] ? wanted : 'editorial';
   return {
     width: opts.width || 1200,
     size,

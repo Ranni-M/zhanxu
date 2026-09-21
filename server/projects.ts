@@ -12,6 +12,10 @@ export type ProjectRow = {
   created_at: number;
   updated_at: number;
 };
+/** 没标题、没图、没介绍 = 从没保存过的空草稿（发布拦截和额度回收共用同一个口径） */
+export function isEmptyDraft(document: { title?: string; intro?: string; images?: unknown[] }) {
+  return !document.title?.trim() && !document.images?.length && !document.intro?.trim();
+}
 export function owned(id: string, owner: string): ProjectRow {
   const row = db.prepare('SELECT * FROM projects WHERE id=? AND owner_id=?').get(id, owner) as
     ProjectRow | undefined;
@@ -241,6 +245,16 @@ projects.post('/', (req, res) => {
   const count = db
     .prepare('SELECT count(*) as n FROM projects WHERE owner_id=?')
     .get(req.user!.id) as { n: number };
+  // 额度满了先把“点了创建、一个字没写”的空草稿回收掉（它们本来也不在作品列表里显示）
+  if (count.n >= 100) {
+    const rows = db
+      .prepare('SELECT id,document FROM projects WHERE owner_id=?')
+      .all(req.user!.id) as { id: string; document: string }[];
+    const stale = rows.filter((row) => isEmptyDraft(JSON.parse(row.document)));
+    const drop = db.prepare('DELETE FROM projects WHERE id=? AND owner_id=?');
+    transaction(() => stale.forEach((row) => drop.run(row.id, req.user!.id)));
+    count.n -= stale.length;
+  }
   if (count.n >= 100) throw new HttpError(400, '最多创建100个项目，请整理已有项目。');
   const id = randomUUID(),
     now = Date.now();
@@ -308,7 +322,7 @@ projects.post('/:id/publish', (req, res) => {
     .parse(req.body);
   if (row.revision !== revision) throw new HttpError(409, '项目已有新版本，请先刷新。');
   const document = JSON.parse(row.document);
-  if (!document.title?.trim() || !document.images?.length || !document.intro?.trim())
+  if (isEmptyDraft(document))
     throw new HttpError(400, '发布前请填写项目名称、介绍，并上传至少一张封面图片。');
   let pub = db
     .prepare('SELECT slug,visibility FROM publications WHERE project_id=?')
