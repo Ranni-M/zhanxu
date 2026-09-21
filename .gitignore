@@ -3,14 +3,14 @@ dist/
 .env
 .env.*
 !.env.example
-output/
+/output/
 .playwright-cli/
 *.tsbuildinfo
 
-data/
+/data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
 public/pdfjs/
-backups/
+/backups/
 public/previews/
