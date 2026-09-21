@@ -20,4 +20,4 @@ export {
   skeletonOptions,
   posterSizeOptions,
 } from './domain/project';
-export { categories, templates, samples } from './data/catalog';
+export { categories, templates, samples, sampleForTemplate } from './data/catalog';

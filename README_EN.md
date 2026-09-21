@@ -28,6 +28,10 @@ This is a runnable full-stack application, suitable for personal graduation proj
 | ---------------------------------------------------- |
 | ![Discover grid](docs/screenshots/home-discover.png) |
 
+| Templates page: nine themes, nine different samples |
+| --------------------------------------------------- |
+| ![Templates page](docs/screenshots/templates.png)   |
+
 ## Features
 
 - Email/password registration, sign-in, sign-out and password change with server-side sessions (scrypt hashing, hashed session tokens, CSRF origin checks, rate limiting).
@@ -41,6 +45,7 @@ This is a runnable full-stack application, suitable for personal graduation proj
 - Guest mode: create a draft, preview and export a portfolio without an account; publishing asks you to sign in, then the draft moves into your account.
 - Multiple colour ways per project, plus a draggable before/after comparison on the public page.
 - Discovery of published works with category search, bookmarks and sorting; the feed starts with all nine template samples (real public projects and samples shown together, samples are labelled and cannot be bookmarked).
+- Each of the nine themes ships with a different sample project, so the templates page and the home strip show nine works instead of one work recoloured nine times.
 - Three cover layouts; server-side export of a 1600px-wide PNG cover or an auto-paginated PNG picture pack (ZIP).
 - Multi-page A4 portfolio PDF (auto table of contents, page numbers, binding margin), a single-file HTML portfolio (all images inlined, opens offline by double-click) and a booth QR code for print or screen.
 - The home page demonstrates import, layout, comparison, export and asset handling with real components.

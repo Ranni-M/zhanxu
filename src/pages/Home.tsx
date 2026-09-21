@@ -13,7 +13,7 @@ import {
   CaretDown,
 } from '@phosphor-icons/react';
 import type { Project, TemplateId } from '../domain/project';
-import { categories, samples, templates } from '../data';
+import { categories, sampleForTemplate, samples, templates } from '../data';
 import { useReveal } from '../lib/reveal';
 import FeatureShowcase from '../components/FeatureShowcase';
 import PosterImage from '../components/PosterImage';
@@ -408,7 +408,7 @@ export default function Home({
               onClick={() => start(template.id)}
               aria-label={'使用' + template.name + '模板'}
             >
-              <PosterImage project={{ ...samples[0], template: template.id }} width={360} />
+              <PosterImage project={sampleForTemplate(template.id)} width={360} />
               <span>
                 {template.name}
                 <ArrowUpRight size={14} />

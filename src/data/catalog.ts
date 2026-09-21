@@ -153,7 +153,7 @@ export const samples: Project[] = [
       '为一套内部工具重新梳理信息结构：把分散的功能收进统一的层级，让每个人都摸清「东西放在哪」。',
     process: '梳理字段与流程，搭出组件规范，再用可交互原型验证命名与层级是否讲得通。',
     template: 'cobalt',
-    images: [{ id: 'f', src: '/images/architecture.jpg', name: '结构与秩序' }],
+    images: [{ id: 'f', src: '/images/desk.jpg', name: '工作台与方法手册' }],
     updatedAt: 0,
     sample: true,
   },
@@ -167,7 +167,7 @@ export const samples: Project[] = [
     intro: '一段关于夜间飞行的短片概念：用光点与声音的节奏，讲述一个人在城市上空独自行走的两小时。',
     process: '分镜推演、色彩情绪板、声音设计与剪辑节奏测试。',
     template: 'neon',
-    images: [{ id: 'g', src: '/images/ocean.jpg', name: '海面与夜色' }],
+    images: [{ id: 'g', src: '/images/night.jpg', name: '夜里的灯' }],
     updatedAt: 0,
     sample: true,
   },
@@ -181,7 +181,7 @@ export const samples: Project[] = [
     intro: '把一年的手写笔记、票据与草图整理成一本可以翻阅的小书，用纸的厚度记录时间的分层。',
     process: '素材编号与整理、网格实验、纸张与装订方式打样。',
     template: 'paper',
-    images: [{ id: 'h', src: '/images/forest.jpg', name: '纸与墨的层次' }],
+    images: [{ id: 'h', src: '/images/lettering.jpg', name: '铅字与纸样' }],
     updatedAt: 0,
     sample: true,
   },
@@ -195,7 +195,7 @@ export const samples: Project[] = [
     intro: '以七张单色影像回应「空」的七种解释，尝试用最少的元素留下最大的想象空间。',
     process: '收集日常痕迹、做减法实验、为每张影像配一句短注。',
     template: 'ink',
-    images: [{ id: 'i', src: '/images/architecture.jpg', name: '线条与空白' }],
+    images: [{ id: 'i', src: '/images/silhouette.jpg', name: '黑与白之间' }],
     updatedAt: 0,
     sample: true,
   },
@@ -209,8 +209,12 @@ export const samples: Project[] = [
     intro: '把同一处场景在不同时间拍下的照片并置，用灰阶差异标记光线与季节的推移。',
     process: '定点拍摄、灰阶校准，再按时间顺序编排成一份可对比的档案。',
     template: 'mono',
-    images: [{ id: 'j', src: '/images/interior.jpg', name: '同一处场景' }],
+    images: [{ id: 'j', src: '/images/camera.jpg', name: '档案里的器物' }],
     updatedAt: 0,
     sample: true,
   },
 ];
+/** 展示模板时给每个模板配一个「本来就用它」的示例作品：九张卡片是九个不同的作品，不是同一个作品换九套配色 */
+export function sampleForTemplate(id: TemplateId): Project {
+  return samples.find((sample) => sample.template === id) ?? samples[0];
+}

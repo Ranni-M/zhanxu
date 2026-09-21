@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowUpRight, ImageSquare } from '@phosphor-icons/react';
-import { samples, templates } from '../data';
+import { sampleForTemplate, templates } from '../data';
 import type { TemplateId } from '../data';
 import PosterImage from '../components/PosterImage';
 export default function Templates({
@@ -28,7 +28,7 @@ export default function Templates({
               onClick={() => start(t.id)}
               aria-label={'选择' + t.name}
             >
-              <PosterImage project={{ ...samples[0], template: t.id }} width={750} />
+              <PosterImage project={sampleForTemplate(t.id)} width={750} />
             </button>
             <div className="template-full-info">
               <div>

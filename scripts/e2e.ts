@@ -134,6 +134,22 @@ try {
   await page.getByRole('heading', { name: '没有找到相关作品' }).waitFor();
   await page.getByRole('button', { name: '查看全部作品', exact: true }).click();
   pass('首页、示例封面与搜索空状态');
+  await page.getByRole('button', { name: '挑选展示模板' }).click();
+  await page.locator('.template-full').first().waitFor();
+  assert.equal(await page.locator('.template-full').count(), 9, '展示模板页应该列全 9 套模板');
+  const templateSources = await page
+    .locator('.template-full .poster-image img')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('src') || ''));
+  assert.equal(
+    new Set(templateSources).size,
+    9,
+    '每套模板要配一个不同的示例作品，不是同一个作品换九套配色',
+  );
+  await warmScroll(page);
+  await page.screenshot({ path: path.join(out, 'templates-page.png'), fullPage: true });
+  await page.getByRole('button', { name: '返回首页' }).click();
+  await page.locator('.hero-art').waitFor();
+  pass('展示模板页：九套模板配九个不同示例');
   const fixturePage = await context.newPage();
   await fixturePage.setContent(
     '<html lang="zh-CN"><style>@page{size:A4;margin:24mm}body{font-family:Arial,sans-serif}section{break-after:page}</style><section><h1>Graduation Project</h1><h2>Project Overview</h2><p>This is a two page project document used for upload verification.</p></section><h2>Design Process</h2><p>Research, prototyping and implementation.</p></html>',
